@@ -309,7 +309,7 @@ Operational alerting on the application's own health (section 4.12) is separate 
 
 ### 4.10 Testing
 
-**Decision:** Three test layers, all run by one command (`make test`) and in CI.
+**Decision:** Three test layers. Python tests live in `tests/`, and unit, integration, and end-to-end tests (Playwright for Python via pytest-playwright) all run with one command, `uv run pytest`, and in CI. Frontend component tests run with `npm test`.
 
 | Layer | Tooling | Covers |
 |---|---|---|
@@ -363,13 +363,13 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 
 **Decision:** Build the project with a documented, agent-driven workflow that reviewers can inspect.
 
-- **Specs and tracker:** Product spec and feature specs in `docs/`; a public GitHub Project with Issues that carry acceptance criteria. Agents pick up and close issues; PRs link to them.
-- **Context management:** A root `AGENTS.md` (with `CLAUDE.md` pointing to it) that describes the project and links to modular docs:
-  - `docs/process.md`: how work flows from issue to merged PR
-  - `docs/agent-team.md`: agent roles and collaboration
-  - `docs/architecture.md`: system design and decisions
-  - `docs/data-contract.md`: available models, fields, and coverage
-  - `docs/api.md`: pointer to the OpenAPI contract
+- **Specs and tracker:** Product spec and feature specs in `_docs/`; a public GitHub Project with Issues that carry acceptance criteria. Agents pick up and close issues; PRs link to them.
+- **Context management:** `_docs/AGENTS.md` lists the commands (`uv sync`, `uv run pytest`), the project rules (for example, no new dependency without asking), and links to modular docs:
+  - `_docs/process.md`: how work is organized (one GitHub issue at a time, acceptance criteria checked before starting and before closing, regular commits)
+  - `_docs/agent-team.md`: agent roles and collaboration
+  - `_docs/architecture.md`: system design and decisions
+  - `_docs/data-contract.md`: available models, fields, and coverage
+  - `_docs/api.md`: pointer to the OpenAPI contract
 - **Agent team:**
 
 | Role | Responsibility | Inputs → outputs |
@@ -380,7 +380,7 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 | QA agent | Writes and maintains integration and Playwright tests from acceptance criteria | acceptance criteria → test PR |
 | Ops agent | Owns CI/CD, telemetry, alerts, and on-call response | alerts + telemetry → fix PR |
 
-- **Collaboration:** The OpenAPI contract is the hand-off point. Backend and frontend agents work in parallel in isolated Git worktrees. The QA agent tests against acceptance criteria, not implementation details. A human reviews and merges every PR.
+- **Collaboration:** Work proceeds one GitHub issue at a time. The OpenAPI contract is the hand-off point between backend and frontend work. The QA agent tests against acceptance criteria, not implementation details. A human reviews and merges every PR.
 - **Reusable capabilities:** Project skills (`SKILL.md`) for repeated tasks such as "add an analysis tool", "add an API endpoint", and "add a Playwright journey", plus subagent definitions for the roles above.
 
 ---
@@ -437,7 +437,7 @@ These features can be reconsidered after the MVP demonstrates reliable investiga
 Phases are ordered so that a working, end-to-end system exists early and later phases add depth.
 
 ### Phase 0 — Set up the AI-assisted workflow
-- Create `AGENTS.md`, the modular `docs/`, and the agent team definition.
+- Expand `_docs/AGENTS.md`, the modular docs in `_docs/`, and the agent team definition.
 - Create the public GitHub Project; turn this plan into specs and issues with acceptance criteria.
 - Add initial project skills and subagent definitions.
 
@@ -450,7 +450,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 - Identify missing or inconsistent data before promising specific analysis.
 - Export a documented Parquet snapshot for demo mode.
 
-**Deliverable:** `docs/data-contract.md` based on real models and fields, plus the demo dataset.
+**Deliverable:** `_docs/data-contract.md` based on real models and fields, plus the demo dataset.
 
 ### Phase 2 — Contract and walking skeleton
 - Write the OpenAPI contract for investigations, analyses, history, and reports.
@@ -526,6 +526,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 12. **Keep demo data identifiable.** Clearly label sample data and any synthetic values.
 13. **Instrument as you build.** Add spans and metrics with each feature rather than retrofitting them.
 14. **Avoid premature infrastructure.** Add components only when they support a defined MVP requirement.
+15. **Ask before adding dependencies.** Dependencies are declared in `pyproject.toml`, and none is added without approval.
 
 ---
 

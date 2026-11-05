@@ -3,44 +3,44 @@
 Tasks are ordered by dependency and delivery tier (see `_docs/plan.md`, section 3). Tasks 1–47 make up the core MVP (Tier 1), tasks 48–52 add live data and deeper analysis (Tier 2), and tasks 53–54 are final validation and documentation.
 
 ## 1. Set up an empty project with a passing test
-Goal: Create the repository skeleton so that `make test` runs and passes.
-Description: Initialize a Python project with uv containing an empty `copilot_core` package and a `backend/` folder, and add pytest, ruff, and mypy as dev dependencies. Add a single trivial test, a `Makefile` with `test` and `lint` targets, a `.gitignore`, and a minimal README stating how to run the tests.
+Goal: Complete the repository skeleton so that `uv run pytest` runs and passes.
+Description: Starting from the existing uv project (Python 3.13, `pyproject.toml`, `main.py`), add pytest as a dev dependency, an empty `copilot_core` package, a `backend/` folder, and a single trivial test in `tests/`. Add a `.gitignore` and fill in the README with how to install (`uv sync`) and run the tests (`uv run pytest`).
 
-## 2. Create AGENTS.md and the documentation skeleton
+## 2. Expand AGENTS.md and the documentation skeleton
 Goal: Give coding agents durable project context from a single entry point.
-Description: Write a root `AGENTS.md` that summarizes the product, the repository layout, the commands to run, and the coding conventions, and add a `CLAUDE.md` that points to it. Create placeholder files in `docs/` (`process.md`, `agent-team.md`, `architecture.md`, `data-contract.md`, `api.md`) and link each one from `AGENTS.md`.
+Description: `_docs/AGENTS.md` already lists the commands, the dependency rule, and `_docs/process.md`; add a short product summary, the repository layout, and the coding conventions. Create placeholder files in `_docs/` (`agent-team.md`, `architecture.md`, `data-contract.md`, `api.md`) and link each one from the Documents section of `_docs/AGENTS.md`.
 
 ## 3. Document the process and agent team, and set up the task tracker
 Goal: Make the development workflow, agent roles, and backlog explicit and public.
-Description: Write `docs/process.md` (issue with acceptance criteria → branch → PR → review → merge) and `docs/agent-team.md` (PM, backend, frontend, QA, and ops agents, with responsibilities, inputs, and outputs; the OpenAPI contract as the backend/frontend hand-off; separate Git worktrees; a human merges every PR). Create a public GitHub Project board, an issue template with an "Acceptance criteria" section, and a PR template that links back to the issue.
+Description: Extend `_docs/process.md` (which already says: one GitHub issue at a time, read the acceptance criteria before starting and before closing, commit regularly) with the branch → PR → review → merge steps, and write `_docs/agent-team.md` (PM, backend, frontend, QA, and ops agents, with responsibilities, inputs, and outputs; the OpenAPI contract as the backend/frontend hand-off; a human merges every PR). Create a public GitHub Project board, an issue template with an "Acceptance criteria" section, and a PR template that links back to the issue.
 
 ## 4. Add project skills and subagent definitions
 Goal: Package repeatable development tasks as reusable agent capabilities.
-Description: Create `SKILL.md` files for recurring tasks such as "add an analysis function", "add an API endpoint", and "add a Playwright journey", each describing steps, conventions, and the tests to add. Add subagent definitions for the roles in `docs/agent-team.md` and reference both from `AGENTS.md`.
+Description: Create `SKILL.md` files for recurring tasks such as "add an analysis function", "add an API endpoint", and "add a Playwright journey", each describing steps, conventions, and the tests to add. Add subagent definitions for the roles in `_docs/agent-team.md` and reference both from `_docs/AGENTS.md`.
 
 ## 5. Inventory the existing data platform
 Goal: List which curated BigQuery models exist and what fields they expose.
-Description: Review the existing ingestion repository and its dbt project to identify the datasets, marts, and models relevant to GDP, inflation, exchange rates, interest rates, and trade. Record each model's name, grain, fields, types, units, and source metadata columns in the "Models" section of `docs/data-contract.md`.
+Description: Review the existing ingestion repository and its dbt project to identify the datasets, marts, and models relevant to GDP, inflation, exchange rates, interest rates, and trade. Record each model's name, grain, fields, types, units, and source metadata columns in the "Models" section of `_docs/data-contract.md`.
 
 ## 6. Profile data coverage and complete the data contract
 Goal: Know exactly which countries, indicators, and periods the data supports.
-Description: Query the curated models listed in `docs/data-contract.md` to measure country coverage, time ranges, frequencies, missing values, and stale series per indicator. Add a coverage matrix, known gaps, and unit or definition inconsistencies to `docs/data-contract.md`, and state which indicators the application will support.
+Description: Query the curated models listed in `_docs/data-contract.md` to measure country coverage, time ranges, frequencies, missing values, and stale series per indicator. Add a coverage matrix, known gaps, and unit or definition inconsistencies to `_docs/data-contract.md`, and state which indicators the application will support.
 
 ## 7. Create the bundled demo dataset
 Goal: Provide a credential-free dataset that mirrors the curated marts.
-Description: Export a representative snapshot of the curated marts described in `docs/data-contract.md` to Parquet files under `data/demo/`. Write `data/demo/README.md` documenting the source, snapshot date, coverage, and the fact that this is sample data, not live data.
+Description: Export a representative snapshot of the curated marts described in `_docs/data-contract.md` to Parquet files under `data/demo/`. Write `data/demo/README.md` documenting the source, snapshot date, coverage, and the fact that this is sample data, not live data.
 
 ## 8. Scaffold the FastAPI backend with a health endpoint
 Goal: Have a running API service with a tested health check.
-Description: Create a FastAPI application in `backend/` with a `GET /health` endpoint and settings loaded from environment variables via pydantic-settings. Add a pytest test using FastAPI's TestClient and a `make run-api` target.
+Description: Create a FastAPI application in `backend/` with a `GET /health` endpoint and settings loaded from environment variables via pydantic-settings. Add a test in `tests/` using FastAPI's TestClient, and add the command to run the API to the Commands section of `_docs/AGENTS.md`.
 
 ## 9. Scaffold the React frontend
 Goal: Have a running React app with a passing component test.
-Description: Create a Vite + React + TypeScript app in `frontend/` with Tailwind CSS and shadcn/ui configured, and a basic layout shell (header, sidebar, main panel). Add Vitest with one component test, ESLint, and `make run-web` and `make test-web` targets.
+Description: Create a Vite + React + TypeScript app in `frontend/` with Tailwind CSS and shadcn/ui configured, and a basic layout shell (header, sidebar, main panel). Add Vitest with one component test, ESLint, and `npm run dev` and `npm test` scripts, and list both in the Commands section of `_docs/AGENTS.md`.
 
 ## 10. Write the OpenAPI contract and generate frontend types
 Goal: Define the API between frontend and backend before implementing it, and keep both sides in sync.
-Description: Write `api/openapi.yaml` covering metadata (countries, indicators, coverage), running an investigation, saving, listing, and fetching investigations, and exporting a PDF, with schemas for findings, series, and anomaly results (value, unit, period, geography, method, source, caveats). Add `openapi-typescript` and a `make gen-types` target in `frontend/`, a check that fails if committed types differ from a fresh generation, and a short description of the contract in `docs/api.md`.
+Description: Write `api/openapi.yaml` covering metadata (countries, indicators, coverage), running an investigation, saving, listing, and fetching investigations, and exporting a PDF, with schemas for findings, series, and anomaly results (value, unit, period, geography, method, source, caveats). Add `openapi-typescript` and an `npm run gen-types` script in `frontend/`, a check that fails if committed types differ from a fresh generation, and a short description of the contract in `_docs/api.md`.
 
 ## 11. Define the core Pydantic result models
 Goal: Create one typed source of truth for analytical results.
@@ -56,7 +56,7 @@ Description: Write development Dockerfiles for `backend/` and `frontend/` and a 
 
 ## 14. Add the CI workflow for pull requests
 Goal: Run lint, type checks, and tests automatically on every PR.
-Description: Create a GitHub Actions workflow that runs ruff, mypy, pytest (with a Postgres service container), ESLint, tsc, Vitest, and the generated-types drift check. Make the workflow a required status check on the `main` branch.
+Description: Add ruff and mypy as dev dependencies and create a GitHub Actions workflow that runs `uv sync`, ruff, mypy, `uv run pytest` (with a Postgres service container), ESLint, tsc, Vitest, and the generated-types drift check. Make the workflow a required status check on the `main` branch.
 
 ## 15. Implement the data service and metadata endpoints
 Goal: Give analytics and the frontend a storage-agnostic way to read economic data.
@@ -136,7 +136,7 @@ Description: Render the investigation's Plotly charts as static images with Kale
 
 ## 34. Set up Playwright with the first end-to-end journey
 Goal: Run real-browser tests against the full local stack.
-Description: Set up Playwright to run against the Docker Compose stack configured with the stubbed Gemini client and demo data. Implement the "run an investigation from selections and see results" journey and wire Playwright into `make test` and CI.
+Description: Set up Playwright for Python (pytest-playwright) in `tests/` to run against the Docker Compose stack configured with the stubbed Gemini client and demo data. Implement the "run an investigation from selections and see results" journey so that it runs with `uv run pytest` and in CI.
 
 ## 35. Complete the end-to-end test suite
 Goal: Cover all key user journeys in a real browser.
@@ -148,11 +148,11 @@ Description: Write a multi-stage Dockerfile that builds the React app to static 
 
 ## 37. Set up Google Cloud foundations
 Goal: Prepare a secure Google Cloud project for automated deployments.
-Description: Create or configure the Google Cloud project, an Artifact Registry repository, Secret Manager entries for the Gemini API key and database URLs, and a deployer service account. Configure Workload Identity Federation so GitHub Actions can authenticate without JSON keys, and document every step in `docs/deployment.md`.
+Description: Create or configure the Google Cloud project, an Artifact Registry repository, Secret Manager entries for the Gemini API key and database URLs, and a deployer service account. Configure Workload Identity Federation so GitHub Actions can authenticate without JSON keys, and document every step in `_docs/deployment.md`.
 
 ## 38. Deploy the dev environment manually
 Goal: Have the application running at a public dev URL.
-Description: Create a Neon Postgres database for dev and a Cloud Run dev service that uses the production image, the Secret Manager secrets, and a least-privilege runtime service account. Deploy once by hand, run migrations, confirm `/health` and demo mode work at the public URL, and add the steps to `docs/deployment.md`.
+Description: Create a Neon Postgres database for dev and a Cloud Run dev service that uses the production image, the Secret Manager secrets, and a least-privilege runtime service account. Deploy once by hand, run migrations, confirm `/health` and demo mode work at the public URL, and add the steps to `_docs/deployment.md`.
 
 ## 39. Deploy to dev automatically on merge
 Goal: Every merge to `main` produces a running dev deployment.
@@ -160,7 +160,7 @@ Description: Add a GitHub Actions workflow that builds and pushes the production
 
 ## 40. Add a manually approved production deployment
 Goal: Promote tested releases to prod with explicit approval.
-Description: Provision a prod Cloud Run service and Neon database mirroring the dev setup in `docs/deployment.md`. Add a workflow, triggered by a version tag and protected by a GitHub Environment approval rule, that deploys the already-built image to prod.
+Description: Provision a prod Cloud Run service and Neon database mirroring the dev setup in `_docs/deployment.md`. Add a workflow, triggered by a version tag and protected by a GitHub Environment approval rule, that deploys the already-built image to prod.
 
 ## 41. Add the local observability stack
 Goal: See backend traces locally in Grafana.
@@ -188,7 +188,7 @@ Description: Connect the Grafana alert webhook to a GitHub Actions workflow that
 
 ## 47. Let the on-call agent propose fixes and demonstrate it
 Goal: Close the loop from alert to reviewed fix.
-Description: Extend the alert-triggered agent workflow so that, after diagnosing, the agent opens a fix PR linked to the diagnosis issue, which goes through normal CI and approval. Stage a realistic failure in dev, record the full alert → diagnosis → PR run, and document it in `docs/on-call.md`.
+Description: Extend the alert-triggered agent workflow so that, after diagnosing, the agent opens a fix PR linked to the diagnosis issue, which goes through normal CI and approval. Stage a realistic failure in dev, record the full alert → diagnosis → PR run, and document it in `_docs/on-call.md`.
 
 ## 48. Implement correlation and lagged-relationship analysis
 Goal: Measure whether two indicators move together, including with a delay.
@@ -196,7 +196,7 @@ Description: Add a function in `copilot_core` that aligns two series, computes c
 
 ## 49. Implement the BigQuery data service
 Goal: Read live curated data from BigQuery with strict cost and access controls.
-Description: Implement the `DataService` interface in `copilot_core` against the curated BigQuery marts listed in `docs/data-contract.md`, using a read-only service account and a dataset allowlist. Enforce `maximum_bytes_billed`, dry-run cost checks, and timeouts, and add tests that run against BigQuery only behind an explicit flag.
+Description: Implement the `DataService` interface in `copilot_core` against the curated BigQuery marts listed in `_docs/data-contract.md`, using a read-only service account and a dataset allowlist. Enforce `maximum_bytes_billed`, dry-run cost checks, and timeouts, and add tests that run against BigQuery only behind an explicit flag.
 
 ## 50. Add live mode with authentication
 Goal: Let authorized users switch to live BigQuery data safely.
@@ -216,4 +216,4 @@ Description: Write tests for missing data, unsupported questions, invalid SQL, B
 
 ## 54. Finalize the README and documentation
 Goal: Let a new visitor understand, run, and evaluate the project quickly.
-Description: Complete the README with the problem description, features, screenshots, architecture diagram, demo URL, and one-command setup. Finish `docs/architecture.md`, the security notes, data limitations, and a short guide to the agent-driven development workflow, and check everything against the acceptance criteria in `_docs/plan.md`.
+Description: Complete the README with the problem description, features, screenshots, architecture diagram, demo URL, and one-command setup. Finish `_docs/architecture.md`, the security notes, data limitations, and a short guide to the agent-driven development workflow, and check everything against the acceptance criteria in `_docs/plan.md`.
