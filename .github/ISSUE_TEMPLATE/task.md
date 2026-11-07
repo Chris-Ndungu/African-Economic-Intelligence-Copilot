@@ -1,0 +1,26 @@
+---
+name: Task
+about: One task for the backlog, groomed by the PM
+title: ""
+labels: []
+assignees: []
+---
+
+## Goal
+
+One or two sentences on what should be true when this is done.
+
+## Acceptance criteria
+
+- [ ] A statement you can check by looking at the result
+- [ ] One line per case, including the awkward ones
+
+## Out of scope
+
+- Something that does not belong in this task, moved to #TASK-NUMBER
+
+## Constraints
+
+- Files this should stay inside
+- Libraries to use
+- Guidelines to follow
