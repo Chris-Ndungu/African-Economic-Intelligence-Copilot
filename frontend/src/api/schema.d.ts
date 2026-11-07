@@ -225,10 +225,13 @@ export interface components {
          */
         IndicatorCode: string;
         /** @enum {string} */
-        Frequency: "annual" | "quarterly" | "monthly";
+        Frequency: "annual" | "quarterly" | "monthly" | "daily";
         /**
-         * @description A period: `YYYY` for annual, `YYYY-Qn` for quarterly or `YYYY-MM` for monthly data.
+         * @description A period: `YYYY` for annual, `YYYY-Qn` for quarterly, `YYYY-MM` for monthly or `YYYY-MM-DD` for daily data. A daily label must be a real calendar date.
          * @example 2022
+         * @example 2022-Q1
+         * @example 2022-01
+         * @example 2022-01-31
          */
         PeriodLabel: string;
         Country: {
@@ -283,7 +286,7 @@ export interface components {
             data_mode: components["schemas"]["DataMode"];
             entries: components["schemas"]["CoverageEntry"][];
         };
-        /** @description The period a result covers, from `start` to `end` inclusive. */
+        /** @description The period a result covers, from `start` to `end` inclusive. `start` must not be after `end`, and both labels must use the format of `frequency`. */
         Period: {
             start: components["schemas"]["PeriodLabel"];
             end: components["schemas"]["PeriodLabel"];
@@ -303,11 +306,13 @@ export interface components {
             /** @description Identifier of the method, for example `z_score` or `historical_mean`. */
             name: string;
             description: string;
-            /** @description Parameter names and the values used. */
+            /** @description Parameter names and the values used. A value is a string, a number, a boolean or a list of these, so it always serializes to JSON. */
             parameters: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["MethodParameterValue"];
             };
         };
+        MethodParameterValue: components["schemas"]["MethodParameterScalar"] | components["schemas"]["MethodParameterScalar"][];
+        MethodParameterScalar: string | number | boolean;
         /** @description Lineage of the data behind a result. */
         Source: {
             /** @description Identifier of the curated dataset or model. */
@@ -328,7 +333,7 @@ export interface components {
         };
         /** @description Data-quality caveats and limits on interpretation. Empty when there are none. */
         Caveats: string[];
-        /** @description A computed number with everything needed to cite it. `value` is `null` when the value is missing; a missing value is never `0`. */
+        /** @description A computed number with everything needed to cite it. `value` is `null` when the value is missing; a missing value is never `0`, and `caveats` must then say why it is missing. Numbers are finite: NaN and infinity are not valid values. */
         NumericResult: {
             /** @description The computed value, or `null` when it is missing. A missing value is never `0`. */
             value: number | null;
@@ -355,7 +360,7 @@ export interface components {
             /** @description The value for the period, or `null` when it is missing. A missing value is never `0`. */
             value: number | null;
         };
-        /** @description A time series of one indicator for one country. The values are in `points`; each point's `value` is `null` when missing, never `0`. */
+        /** @description A time series of one indicator for one country. The values are in `points`; each point's `value` is `null` when missing, never `0`, and `caveats` must then say why. Each point's period lies within `period` and uses the format of its `frequency`. */
         Series: {
             id: string;
             metric: components["schemas"]["IndicatorCode"];
