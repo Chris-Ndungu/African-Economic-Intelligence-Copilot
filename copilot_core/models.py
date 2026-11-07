@@ -18,15 +18,19 @@ caveat explaining why it is missing.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Mapping
 from datetime import date
-from typing import Annotated, ClassVar, Literal
+from types import MappingProxyType
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import (
     AfterValidator,
     AnyUrl,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
+    PlainSerializer,
     Strict,
     StringConstraints,
     model_validator,
@@ -43,6 +47,7 @@ __all__ = [
     "Geography",
     "Method",
     "NumericResult",
+    "Parameters",
     "Period",
     "SeriesPoint",
     "SeriesResult",
@@ -120,6 +125,60 @@ ParameterValue = _StrictScalar | Annotated[list[_StrictScalar], Strict()]
 Caveats = tuple[NonEmptyStr, ...]
 
 
+class Parameters(Mapping[str, Any]):
+    """A read-only, hashable mapping of method parameters.
+
+    List values are stored as tuples, so neither the mapping nor its values
+    can be changed after a result is built. It compares equal to a plain
+    ``dict`` with the same items and serializes to a JSON object with arrays.
+    """
+
+    __slots__ = ("_items",)
+
+    def __init__(self, items: Mapping[str, Any]) -> None:
+        frozen = {k: tuple(v) if isinstance(v, list) else v for k, v in items.items()}
+        object.__setattr__(self, "_items", MappingProxyType(frozen))
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError("Parameters is read-only")
+
+    def __getitem__(self, key: str) -> Any:
+        return self._items[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self._items.items()))
+
+    def __repr__(self) -> str:
+        return f"Parameters({dict(self._items)!r})"
+
+    def to_dict(self) -> dict[str, Any]:
+        """A plain ``dict`` copy, with tuple values as lists."""
+        return {k: list(v) if isinstance(v, tuple) else v for k, v in self._items.items()}
+
+
+def _thaw_parameters(value: Any) -> Any:
+    # Let an existing Parameters be validated again, for example when a
+    # method is reused in another result.
+    return value.to_dict() if isinstance(value, Parameters) else value
+
+
+ParameterMap = Annotated[
+    dict[str, ParameterValue],
+    BeforeValidator(_thaw_parameters),
+    AfterValidator(Parameters),
+    PlainSerializer(
+        lambda value: value.to_dict(), return_type=dict[str, ParameterValue]
+    ),
+]
+"""Method parameters, validated as a ``dict`` and stored as ``Parameters``."""
+
+
 # --- Models -----------------------------------------------------------------
 
 
@@ -182,7 +241,7 @@ class Method(_Model):
         description="Identifier of the method, for example `z_score` or `historical_mean`."
     )
     description: NonEmptyStr
-    parameters: dict[str, ParameterValue] = Field(
+    parameters: ParameterMap = Field(
         description="Parameter names and the values used."
     )
 

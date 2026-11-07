@@ -512,7 +512,8 @@ def test_anomaly_threshold_cannot_be_missing():
 )
 def test_parameters_accept_json_scalars_and_lists(value):
     result = Method.model_validate(method(parameters={"p": value}))
-    assert result.parameters["p"] == value
+    expected = tuple(value) if isinstance(value, list) else value
+    assert result.parameters["p"] == expected
     assert json.loads(result.model_dump_json())["parameters"]["p"] == value
 
 
@@ -586,6 +587,75 @@ def test_models_are_frozen(model):
     field = next(iter(model.model_fields))
     with pytest.raises(ValidationError, match="frozen"):
         setattr(m, field, getattr(m, field))
+
+
+def frozen_parameters_finding():
+    return Finding.model_validate(
+        finding(method=method(parameters={"a": [1, "x", True], "b": 1.5, "c": 3}))
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda p: p.__setitem__("b", 99.0),
+        lambda p: p.__setitem__("bad", math.nan),
+        lambda p: p.__setitem__("obj", {"nested": object()}),
+        lambda p: p.__delitem__("b"),
+        lambda p: p.update({"b": 99.0}),
+        lambda p: p.pop("b"),
+        lambda p: p.clear(),
+        lambda p: p["a"].append("y"),
+        lambda p: p["a"].__setitem__(0, 2),
+        lambda p: setattr(p, "_items", {}),
+        lambda p: p._items.__setitem__("b", 99.0),
+    ],
+    ids=[
+        "set", "set-nan", "set-object", "delete", "update", "pop", "clear",
+        "list-append", "list-set", "replace-store", "store-set",
+    ],
+)
+def test_parameters_cannot_be_changed_in_place(change):
+    f = frozen_parameters_finding()
+    before = f.model_dump_json()
+    with pytest.raises((TypeError, AttributeError)):
+        change(f.method.parameters)
+    assert f.model_dump_json() == before
+    assert f.method.parameters == {"a": (1, "x", True), "b": 1.5, "c": 3}
+
+
+def test_parameters_list_values_are_tuples_and_dump_as_lists():
+    f = frozen_parameters_finding()
+    assert f.method.parameters["a"] == (1, "x", True)
+    assert f.model_dump()["method"]["parameters"] == {"a": [1, "x", True], "b": 1.5, "c": 3}
+    assert json.loads(f.model_dump_json())["method"]["parameters"]["a"] == [1, "x", True]
+    assert Finding.model_validate_json(f.model_dump_json()) == f
+    assert Finding.model_validate(f.model_dump()) == f
+
+
+def test_parameters_can_be_reused_in_another_method():
+    f = frozen_parameters_finding()
+    reused = Method(name="z_score", description="Reused.", parameters=f.method.parameters)
+    assert reused.parameters == f.method.parameters
+
+
+def test_parameters_still_reject_tuples_from_callers():
+    with pytest.raises(ValidationError):
+        Method.model_validate(method(parameters={"p": (1, 2)}))
+
+
+@pytest.mark.parametrize("model", ALL_MODELS, ids=lambda m: m.__name__)
+def test_models_are_hashable(model):
+    m = model.model_validate(ALL_MODELS[model]())
+    copy = model.model_validate_json(m.model_dump_json())
+    assert hash(m) == hash(copy)
+    assert len({m, copy}) == 1
+
+
+def test_hash_differs_when_parameters_differ():
+    a = Method.model_validate(method(parameters={"p": [1, 2]}))
+    b = Method.model_validate(method(parameters={"p": [1, 3]}))
+    assert a != b and len({a, b}) == 2
 
 
 def test_result_lists_are_immutable_tuples():
