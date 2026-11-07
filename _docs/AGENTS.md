@@ -13,6 +13,7 @@ Commands
 - `uv sync` - install dependencies
 - `uv run pytest` - the whole suite
 - `uv run pytest tests/test_smoke.py` - one test file
+- `uv run uvicorn backend.main:app --reload` - run the API on port 8000 (docs at `/docs`)
 
 Rules
 
