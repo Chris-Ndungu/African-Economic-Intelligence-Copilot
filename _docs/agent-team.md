@@ -23,9 +23,10 @@ Follows [team/pm.md](team/pm.md).
 
 ## Frontend
 
-- Responsibilities: implements the UI against the OpenAPI contract and the
-  types generated from it
-- Inputs: a groomed issue and the OpenAPI contract
+- Responsibilities: implements the UI in Jinja templates, HTMX partials,
+  CSS and small plain-JavaScript files, rendering the same `copilot_core`
+  results the JSON API returns
+- Inputs: a groomed issue and the `copilot_core` result models
 - Outputs: a frontend PR
 
 ## QA
@@ -47,9 +48,10 @@ Follows [team/qa-engineer.md](team/qa-engineer.md).
 ## Collaboration
 
 - Work proceeds one GitHub issue at a time
-- The OpenAPI contract is the hand-off between backend and frontend. The
-  contract changes before API behavior does
+- The `copilot_core` result models are the hand-off between backend and
+  frontend; the OpenAPI contract is the hand-off between the API and its
+  clients and tests. The contract changes before API behavior does
 - A human reviews and merges every PR. No agent merges
-- When two roles disagree, for example the frontend finds the contract is
-  wrong, nobody works around it. The issue goes back to the PM to re-groom,
+- When two roles disagree, for example the frontend finds a result model
+  is missing something it must show, nobody works around it. The issue goes back to the PM to re-groom,
   and work resumes from the updated issue

@@ -1,12 +1,13 @@
 # API
 
-Where the OpenAPI contract lives, how frontend types are generated from it, and the error and data-mode conventions.
+Where the OpenAPI contract for the JSON API lives, how it is validated, which routes are outside it, and the error and data-mode conventions.
 
 ## Where the contract lives
 
 The contract is [`api/openapi.yaml`](../api/openapi.yaml), written in
-OpenAPI 3.1. It is the hand-off between the frontend, the backend and the
-tests: each side builds against it rather than against the other's code.
+OpenAPI 3.1. It describes the JSON API at `/api/...` and `/health`, and is
+the hand-off between the API and its clients and tests: each side builds
+against it rather than against the other's code.
 
 It defines:
 
@@ -24,15 +25,11 @@ It defines:
   models in `copilot_core/models.py` implement them; `SourceRef` and
   `SeriesResult` there are `Source` and `Series` here
 
-Lint it from the repository root:
-
-```sh
-npx @redocly/cli lint api/openapi.yaml
-```
-
-The lint must report no errors. It reports four warnings that are expected:
-the server URL is `localhost`, and `/health`, `/api/countries` and
-`/api/indicators` take no input, so they have no 4xx response.
+The contract is validated by `uv run pytest`: a test in
+`tests/test_web.py` checks `api/openapi.yaml` against the OpenAPI
+specification with `openapi-spec-validator`, so no Node tool is needed.
+Another test checks that every path FastAPI generates is `/health` or
+starts with `/api/`.
 
 The data-related schemas (countries, indicators, coverage, units and result
 fields) are based on [`plan.md`](plan.md), because
@@ -43,22 +40,21 @@ Example values in the contract are illustrative, not real statistics.
 ## The contract changes first
 
 The OpenAPI contract changes before API behavior does. To add or change an
-endpoint, edit `api/openapi.yaml`, lint it, regenerate the frontend types,
-and only then change the FastAPI route or the frontend code. The
-`add-api-endpoint` skill in `.claude/skills/` walks through the steps.
+endpoint, edit `api/openapi.yaml`, check it validates with `uv run pytest`,
+and only then change the FastAPI route. The `add-api-endpoint` skill in
+`.claude/skills/` walks through the steps.
 
-## Regenerating frontend types
+## HTML routes
 
-Frontend types are generated with `openapi-typescript`, never hand-written.
-From `frontend/`:
-
-- `npm run gen-types` writes `frontend/src/api/schema.d.ts` from
-  `api/openapi.yaml`. Commit the regenerated file with the contract change
-- `npm run check-types` exits non-zero when the committed file differs from
-  a fresh generation, and zero when it matches
-
-`frontend/src/api/.gitattributes` keeps `schema.d.ts` at LF line endings so
-the check also passes on a Windows checkout.
+The server-rendered pages (`GET /`, and `GET /investigations/{id}` from
+#23), the HTMX partials under `/partials/...` and the static files under
+`/static/...` are outside the contract. They return HTML for the app's own
+pages, not data for other clients, and they render the same `copilot_core`
+result models the JSON API returns, so they have no separate schema to keep
+in sync. They are kept out of the contract by registering their router in
+`backend/web.py` with `include_in_schema=False`, and the static files are a
+mount, which FastAPI never adds to the schema. A test fails if any path
+other than `/health` or `/api/...` appears in the generated schema.
 
 ## Conventions
 

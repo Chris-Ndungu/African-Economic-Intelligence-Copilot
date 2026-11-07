@@ -1,0 +1,4 @@
+# Vendored files are committed exactly as downloaded. Never convert their
+# line endings, so their SHA-256 stays the one recorded in README.md.
+*.js -text
+*.css -text

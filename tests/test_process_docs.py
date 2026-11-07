@@ -62,9 +62,25 @@ def test_agent_team_links_pm_role_and_states_collaboration_rules():
     text = read(DOCS / "agent-team.md")
     assert "](team/pm.md)" in text
     flat = " ".join(text.split())
-    assert "The OpenAPI contract is the hand-off between backend and frontend" in flat
+    assert (
+        "The `copilot_core` result models are the hand-off between backend and "
+        "frontend; the OpenAPI contract is the hand-off between the API and its "
+        "clients and tests. The contract changes before API behavior does"
+    ) in flat
     assert "A human reviews and merges every PR" in flat
     assert "goes back to the PM to re-groom" in flat
+
+
+def test_agent_team_frontend_role_uses_jinja_and_htmx():
+    text = read(DOCS / "agent-team.md")
+    entry = " ".join(re.search(r"^## Frontend\n(.*?)(?=^## |\Z)", text, re.S | re.M).group(1).split())
+    for phrase in (
+        "Jinja templates, HTMX partials, CSS and small plain-JavaScript files",
+        "rendering the same `copilot_core` results the JSON API returns",
+        "Inputs: a groomed issue and the `copilot_core` result models",
+    ):
+        assert phrase in entry, phrase
+    assert "types generated" not in entry
 
 
 def test_agent_team_links_resolve():

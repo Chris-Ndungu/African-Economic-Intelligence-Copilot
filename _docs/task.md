@@ -37,10 +37,12 @@ Description: Create a FastAPI application in `backend/` with a `GET /health` end
 ## 9. Scaffold the React frontend
 Goal: Have a running React app with a passing component test.
 Description: Create a Vite + React + TypeScript app in `frontend/` with Tailwind CSS and shadcn/ui configured, and a basic layout shell (header, sidebar, main panel). Add Vitest with one component test, ESLint, and `npm run dev` and `npm test` scripts, and list both in the Commands section of `_docs/AGENTS.md`.
+Superseded by #74: the React app was replaced by Jinja templates and HTMX served by FastAPI.
 
 ## 10. Write the OpenAPI contract and generate frontend types
 Goal: Define the API between frontend and backend before implementing it, and keep both sides in sync.
 Description: Write `api/openapi.yaml` covering metadata (countries, indicators, coverage), running an investigation, saving, listing, and fetching investigations, and exporting a PDF, with schemas for findings, series, and anomaly results (value, unit, period, geography, method, source, caveats). Add `openapi-typescript` and an `npm run gen-types` script in `frontend/`, a check that fails if committed types differ from a fresh generation, and a short description of the contract in `_docs/api.md`.
+Superseded by #74: the contract stays, but frontend type generation was removed and the contract is now validated by `uv run pytest`.
 
 ## 11. Define the core Pydantic result models
 Goal: Create one typed source of truth for analytical results.
@@ -51,12 +53,12 @@ Goal: Store investigations durably with versioned schema changes.
 Description: Add SQLAlchemy 2 and Alembic to the backend, with a connection configured via an environment variable. Create an `investigations` table holding the question, selections, parameters, findings JSON, chart configuration, sources, data mode, status, and timestamps, and write an integration test that runs migrations against a Postgres container.
 
 ## 13. Run the full system with Docker Compose
-Goal: Start the frontend, API, and Postgres locally with one command.
-Description: Write development Dockerfiles for `backend/` and `frontend/` and a `docker-compose.yml` with services for both plus Postgres. The API should apply Alembic migrations on startup, and `docker compose up` alone must produce a working stack; document this in the README.
+Goal: Start Postgres and the API locally with one command, with the API serving both the server-rendered workspace and the JSON API.
+Description: Write a development Dockerfile and a `docker-compose.yml` with two services, `db` (Postgres) and `api`; there is no separate frontend service because FastAPI serves the pages, static files and API (#74). The API waits for a healthy database, applies Alembic migrations on startup, reloads on Python changes and picks up template and static-file edits without a rebuild; document `docker compose up` in the README.
 
 ## 14. Add the CI workflow for pull requests
 Goal: Run lint, type checks, and tests automatically on every PR.
-Description: Add ruff and mypy as dev dependencies and create a GitHub Actions workflow that runs `uv sync`, ruff, mypy, `uv run pytest` (with a Postgres service container), ESLint, tsc, Vitest, and the generated-types drift check. Make the workflow a required status check on the `main` branch.
+Description: Add ruff and mypy as dev dependencies and create a GitHub Actions workflow with one Python job that runs `uv sync --locked`, ruff, mypy and `uv run pytest` (with a Postgres service container). There is no Node step: templates, the vendored-file checksums and the OpenAPI contract validation are all checked by `uv run pytest` (#74). Make the workflow a required status check on the `main` branch.
 
 ## 15. Implement the data service and metadata endpoints
 Goal: Give analytics and the frontend a storage-agnostic way to read economic data.
@@ -79,20 +81,20 @@ Goal: Save, list, and reopen investigations through the API.
 Description: Implement a repository class in `copilot_core` for creating, updating, listing, and fetching rows in the `investigations` Postgres table. Expose it via the investigation endpoints in `api/openapi.yaml` and add integration tests against a real Postgres database.
 
 ## 20. Build the selection panel in the frontend
-Goal: Let analysts choose countries, indicators, and periods interactively.
-Description: Build a panel with multi-select countries, an indicator select, and a date range, populated from the `/countries`, `/indicators`, and `/coverage` endpoints via TanStack Query. Disable unavailable combinations based on coverage data and add component tests.
+Goal: Let analysts choose countries, indicators, and periods in a server-rendered panel that only allows combinations the data supports.
+Description: Add a pure function in `copilot_core` that turns the coverage from the `DataService` and the submitted values into the panel state (options, disabled countries and why, allowed period range, messages, valid selection). Render it as a `<form>` in the workspace sidebar and re-render it through `POST /partials/selection` with HTMX on every change, with at most 8 countries, visible reasons for disabled countries, loading and error states, and pytest tests for both the rule function and the rendered HTML.
 
 ## 21. Build the chart and table components
-Goal: Render analytical results as interactive charts and data tables.
-Description: Build reusable Plotly chart components (time series, multi-country comparison, anomaly markers) and a data table component that consume the generated API types for series and results. Show units, periods, and gaps in the data visibly, and add component tests with fixture data.
+Goal: Render analytical results as server-rendered chart and table partials that show units, periods, and gaps exactly as `copilot_core` returns them.
+Description: Add a `ChartSpec` schema to the contract and `copilot_core`, and a Python figure builder that turns it and its results into Plotly figure JSON (gaps not bridged, mixed units refused, anomaly direction shown by marker shape), drawn in the browser by vendored Plotly.js. Add a sortable table partial that shows missing values as "—", and one Python number formatter used as a Jinja filter for tables, charts and cards, with pytest unit and template tests.
 
 ## 22. Build the findings and evidence view
-Goal: Show each finding with its method, parameters, sources, and caveats.
-Description: Build the investigation results page that lays out narrative finding cards next to the chart and table components, all driven by the same result objects. Each card shows its method, parameters, source references, caveats, and missing-data notes, and labels hypotheses separately from observed facts.
+Goal: Show each finding with its method, parameters, sources, and caveats, and let analysts tell observed facts from hypotheses at a glance.
+Description: Build a results partial that renders one saved investigation: a header with the question or selections and data mode, and a card per finding next to the chart and table partials it references (#21), with method, parameters, `<details>` source references and caveats. Hypotheses follow facts under "Possible explanations" with a text label, unverified claims are labelled with their reason, all stored text is autoescaped, and pytest template tests cover each case.
 
 ## 23. Build the investigation history sidebar
-Goal: Let analysts revisit and continue previous investigations.
-Description: Build a sidebar that lists saved investigations from the API with title, date, and status, and opens one in the results page when clicked. Give each investigation a URL (`/investigations/:id`) so it can be bookmarked and reloaded, with component tests.
+Goal: Let analysts see their saved investigations, open one at its own URL, and start a new one from its selections.
+Description: Render the saved investigations from the `copilot_core` repository in a history partial at `GET /partials/history`, newest first, with title, local-time date, status, "Load more", an empty state and a database-error state. Add the full page `GET /investigations/{id}` (or only the main panel for HTMX requests, with `hx-push-url`), an HTML 404 for unknown IDs, and a "Start from these selections" button, with pytest tests.
 
 ## 24. Create the Gemini client wrapper
 Goal: Call Gemini safely, with timeouts, errors, and a test stub.
@@ -116,11 +118,11 @@ Description: Build an investigation service in `copilot_core` that accepts a nat
 
 ## 29. Stream investigation progress over server-sent events
 Goal: Let clients follow an investigation step by step while it runs.
-Description: Add a server-sent events endpoint that emits progress events (fetching data, running each analysis, interpreting, validating, saved, or failed) from the investigation service. Define the event schema in `api/openapi.yaml` and test the event sequence for both success and failure.
+Description: Expose the investigation service in `copilot_core` as an async iterator of typed progress events, and add a two-step flow to the contract: `POST /api/investigations/runs` creates a `pending` run, and `GET /api/investigations/{investigation_id}/events` claims it atomically and streams it as server-sent events, so browsers can read it with `EventSource` and the HTMX SSE extension (#30). Test the exact event sequence for success and each failure, reopening a finished run, a second connection, stale runs and client disconnects.
 
 ## 30. Add natural-language input and live progress to the frontend
-Goal: Let analysts ask a question and watch the investigation run.
-Description: Add a question input alongside the selection panel that starts an investigation and subscribes to the server-sent progress events. Show each step as it happens, open the results page when the investigation is saved, and show clear messages when the service reports an error.
+Goal: Let analysts ask a question, use the selection panel, or both, and watch the investigation run.
+Description: Add a question input and a "Run investigation" button that posts the question and the selection form to `POST /partials/investigations/run`, which creates a `pending` investigation and returns a progress partial. Progress arrives as HTML fragments over `GET /partials/investigations/{id}/progress` through the vendored HTMX SSE extension, from the same `copilot_core` events as #29; on `saved` the results open at `/investigations/{id}` and the history refreshes, with Cancel, Try again, connection-lost and screen-reader states, and pytest tests of the fragments.
 
 ## 31. Label demo mode and handle unavailable services
 Goal: Make the data mode obvious and never fake success.
@@ -131,8 +133,8 @@ Goal: Produce a PDF from a stored investigation without re-running the AI.
 Description: Create a Jinja2 HTML report template and render it to PDF with WeasyPrint, including the summary, findings, tables, methodology, parameters, sources, caveats, data mode, and generation timestamp. Expose it through the export endpoint in `api/openapi.yaml` and test that the numbers in the report match the stored investigation.
 
 ## 33. Add charts to PDF reports and an export button
-Goal: Make exported reports visual and downloadable from the UI.
-Description: Render the investigation's Plotly charts as static images with Kaleido and embed them in the PDF report template. Add an "Export PDF" action to the results page that downloads the file, with loading and error states and a component test.
+Goal: Make exported reports visual and downloadable from the results view.
+Description: Render each stored `ChartSpec` with the same `copilot_core` figure builder as the results view (#21), turn the figure into a static image with Plotly and Kaleido, and embed it in the PDF next to the findings that cite it. Add an "Export PDF" button for succeeded investigations, downloaded by a small `backend/static/export.js` with loading and error states and a plain-link fallback without JavaScript, with pytest tests.
 
 ## 34. Set up Playwright with the first end-to-end journey
 Goal: Run real-browser tests against the full local stack.
@@ -143,8 +145,8 @@ Goal: Cover all key user journeys in a real browser.
 Description: Using the existing Playwright setup, add journeys for running an investigation from a question, saving and reopening an investigation, exporting a PDF, seeing the demo-mode banner, and seeing the error state when the AI is unavailable. Keep tests independent of each other and stable in CI.
 
 ## 36. Build the production container image
-Goal: Ship the frontend and API as a single deployable image.
-Description: Write a multi-stage Dockerfile that builds the React app to static files and serves them from FastAPI alongside the API. Keep the image small, run it as a non-root user, and verify it starts locally against the Compose Postgres.
+Goal: Ship one image that serves the server-rendered pages, static files, and JSON API from the same FastAPI process.
+Description: Write a multi-stage Dockerfile that installs Python dependencies with `uv sync --locked --no-dev` and copies `backend/templates/` and `backend/static/`; there is no Node stage or frontend build (#74). Run it as a non-root user on the `PORT` variable, return a JSON 404 under `/api/` and an HTML 404 elsewhere, set long cache headers for vendored files and `no-cache` for pages, and verify it locally against the Compose Postgres.
 
 ## 37. Set up Google Cloud foundations
 Goal: Prepare a secure Google Cloud project for automated deployments.
@@ -175,8 +177,8 @@ Goal: Measure investigation health, latency, and AI usage in one dashboard.
 Description: Record metrics for investigation count, success/failure rate, end-to-end latency, Gemini latency, and token usage, and add spans for each Gemini call following the OpenTelemetry GenAI semantic conventions. Build a Grafana dashboard for the investigation journey and commit it as JSON in the repository.
 
 ## 44. Add frontend tracing
-Goal: See one trace from the browser click through to the database write.
-Description: Add OpenTelemetry browser instrumentation to the React app and propagate trace context on API requests. Confirm in the local Grafana that a single trace covers the browser, API, analysis, Gemini, and database spans for an investigation.
+Goal: See one trace from the browser click through to the database write, without telemetry credentials in the browser and without a JavaScript package.
+Description: Add a small hand-written `backend/static/tracing.js` that starts a W3C trace on "Run investigation", sends `traceparent` on the run request and in the progress stream URL, and posts one browser span as OTLP/JSON to a same-origin forwarding endpoint kept out of the contract. Confirm in the local Grafana that a single trace covers the browser, API, analysis, Gemini, and database spans.
 
 ## 45. Connect deployed environments to Grafana Cloud and add an alert
 Goal: Get notified when users are affected in dev or prod.

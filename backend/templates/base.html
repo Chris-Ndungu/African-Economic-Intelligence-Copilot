@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ request.app.state.settings.app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/{{ htmx_file }}" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>{{ request.app.state.settings.app_name }}</h1>
+    <a class="button" href="/">New investigation</a>
+  </header>
+  <div class="layout">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

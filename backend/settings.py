@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "African Economic Intelligence Copilot"
-    """Title shown on the API docs page."""
+    """Product name shown in the page header and on the API docs page."""
 
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     """Log level for the application loggers."""

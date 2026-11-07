@@ -10,6 +10,17 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 uv sync
 ```
 
+## Run locally
+
+```
+uv run uvicorn backend.main:app --reload
+```
+
+Then open http://localhost:8000. FastAPI serves the workspace pages, the
+static files and the JSON API from one process; the API docs are at
+http://localhost:8000/docs. No database, Gemini key or network access is
+needed to see the workspace.
+
 ## Tests
 
 ```

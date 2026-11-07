@@ -1,0 +1,15 @@
+# Vendored files
+
+Third-party browser files, committed exactly as downloaded from their
+official release and never edited. They are served from `/static/vendor/`,
+so the app works offline and the browser makes no third-party request.
+
+Each file has its exact version in its name and one row in the table below.
+`tests/test_web.py` recomputes the SHA-256 of every file in this folder and
+fails if a file differs from its row, or if a file has no row. To add or
+upgrade a file: download it from a pinned URL, put the version in the file
+name, add or update its row, and remove the old file.
+
+| File | Version | Source URL | SHA-256 |
+|---|---|---|---|
+| `htmx-2.0.11.min.js` | htmx 2.0.11 | https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js | `d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717` |
