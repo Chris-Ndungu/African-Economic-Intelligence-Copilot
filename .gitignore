@@ -9,6 +9,9 @@ __pycache__/
 build/
 dist/
 
+# Node
+node_modules/
+
 # Environment and secrets
 .env
 .env.*
