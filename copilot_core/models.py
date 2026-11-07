@@ -142,6 +142,9 @@ class Parameters(Mapping[str, Any]):
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError("Parameters is read-only")
 
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("Parameters is read-only")
+
     def __getitem__(self, key: str) -> Any:
         return self._items[key]
 
@@ -156,6 +159,12 @@ class Parameters(Mapping[str, Any]):
 
     def __repr__(self) -> str:
         return f"Parameters({dict(self._items)!r})"
+
+    def __reduce__(self) -> tuple[type[Parameters], tuple[dict[str, Any]]]:
+        # A mappingproxy cannot be pickled, so copy and pickle a plain dict
+        # and rebuild through __init__, which freezes it again. No state is
+        # returned, so unpickling cannot set the store to something mutable.
+        return (Parameters, (dict(self._items),))
 
     def to_dict(self) -> dict[str, Any]:
         """A plain ``dict`` copy, with tuple values as lists."""
