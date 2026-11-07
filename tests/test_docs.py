@@ -27,6 +27,56 @@ def test_every_link_in_agents_md_resolves():
     assert broken == []
 
 
+def github_anchor(heading: str) -> str:
+    slug = re.sub(r"[^\w\- ]", "", heading.strip().lower())
+    return slug.replace(" ", "-")
+
+
+def test_every_anchor_in_agents_md_matches_a_heading():
+    text = AGENTS.read_text(encoding="utf-8")
+    for target, anchor in re.findall(r"\]\(([^)#]+)#([^)]+)\)", text):
+        headings = re.findall(r"^#+ (.+)$", (DOCS / target).read_text(encoding="utf-8"), re.M)
+        assert anchor in {github_anchor(h) for h in headings}, f"{target}#{anchor}"
+
+
+def test_product_section_is_at_most_five_sentences():
+    product = " ".join(section("Product").split())
+    sentences = [s for s in re.split(r"(?<=\.)\s+", product) if s]
+    assert 0 < len(sentences) <= 5
+
+
+def test_conventions_state_the_required_rules():
+    conventions = " ".join(section("Conventions").split())
+    for phrase in (
+        "Business logic lives in `copilot_core`, with no web-framework imports",
+        "FastAPI routes in `backend/` stay thin",
+        "Tests live in `tests/` and run with `uv run pytest`",
+        "The OpenAPI contract changes before API behavior does",
+        "plan.md#8-",
+    ):
+        assert phrase in conventions
+
+
+def test_commands_and_rules_keep_their_original_lines():
+    assert "- `uv sync` - install dependencies" in section("Commands")
+    assert "- `uv run pytest` - the whole suite" in section("Commands")
+    rules = " ".join(section("Rules").split())
+    assert "Dependencies are added in `pyproject.toml`. Do not add one without asking" in rules
+
+
+def test_placeholders_name_the_issue_that_fills_them():
+    expected = {
+        "agent-team.md": "#3",
+        "architecture.md": "#54",
+        "data-contract.md": "#5 and #6",
+        "api.md": "#10",
+    }
+    for name, issue in expected.items():
+        text = (DOCS / name).read_text(encoding="utf-8")
+        assert text.startswith("# "), f"{name} has no heading"
+        assert f"Filled in by {issue}." in text, name
+
+
 def test_layout_matches_repository_root():
     listed = {
         name.rstrip("/")
