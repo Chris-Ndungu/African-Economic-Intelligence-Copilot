@@ -53,6 +53,7 @@ Documents
 - [task-template.md](task-template.md) - template for groomed issues
 - [team/pm.md](team/pm.md) - Product Manager role
 - [team/software-engineer.md](team/software-engineer.md) - Software Engineer role
+- [team/qa-engineer.md](team/qa-engineer.md) - QA Engineer role
 - [agent-team.md](agent-team.md) - agent roles and how they collaborate
 - [architecture.md](architecture.md) - system design and decisions
 - [data-contract.md](data-contract.md) - available data models, fields and coverage
