@@ -22,6 +22,12 @@ Commands
 - `npm run gen-types` - regenerate `frontend/src/api/schema.d.ts` from `api/openapi.yaml` (run from `frontend/`)
 - `npm run check-types` - fail if `frontend/src/api/schema.d.ts` is out of date with the contract (run from `frontend/`)
 - `npx @redocly/cli lint api/openapi.yaml` - lint the OpenAPI contract
+- `docker run -d --name copilot-postgres -e POSTGRES_USER=copilot -e POSTGRES_PASSWORD=copilot -e POSTGRES_DB=copilot -p 5432:5432 postgres:17` - start a local Postgres; then set `DATABASE_URL=postgresql+psycopg://copilot:copilot@localhost:5432/copilot` in `.env` or the shell
+- `uv run alembic upgrade head` - apply the migrations to the database in `DATABASE_URL`; `uv run alembic downgrade base` removes them
+- `uv run alembic check` - fail if the SQLAlchemy models in `copilot_core/db.py` and the migrations differ (needs a database at head)
+- `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
+- `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
+- `docker rm -f copilot-postgres` - stop and remove the local Postgres
 
 Rules
 
@@ -31,6 +37,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `alembic.ini` - Alembic configuration; the connection string comes from `DATABASE_URL`, never this file
 - `api/` - the OpenAPI contract, `api/openapi.yaml`
 - `backend/` - FastAPI application: thin routes, settings, no business logic
 - `frontend/` - React + TypeScript app (Vite, Tailwind, shadcn/ui), with its own npm scripts and Vitest tests
@@ -38,6 +45,7 @@ Repository layout
   persistence, with no web-framework imports
 - `tests/` - all Python tests, run with `uv run pytest`
 - `main.py` - placeholder entry point from `uv init`
+- `migrations/` - Alembic migrations; the database schema changes only through a new migration here
 - `pyproject.toml` - project metadata, dependencies and pytest settings
 - `uv.lock` - locked dependency versions, updated by `uv`
 - `README.md` - project overview, setup and test commands
