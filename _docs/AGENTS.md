@@ -14,6 +14,11 @@ Commands
 - `uv run pytest` - the whole suite
 - `uv run pytest tests/test_smoke.py` - one test file
 - `uv run uvicorn backend.main:app --reload` - run the API on port 8000 (docs at `/docs`)
+- `npm ci` - install frontend dependencies (run from `frontend/`)
+- `npm run dev` - serve the frontend at `http://localhost:5173` (run from `frontend/`)
+- `npm test` - run the frontend Vitest suite (run from `frontend/`)
+- `npm run lint` - lint the frontend with ESLint, failing on any warning (run from `frontend/`)
+- `npm run build` - type-check and build the frontend into `frontend/dist/` (run from `frontend/`)
 
 Rules
 
@@ -24,6 +29,7 @@ Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
 - `backend/` - FastAPI application: thin routes, settings, no business logic
+- `frontend/` - React + TypeScript app (Vite, Tailwind, shadcn/ui), with its own npm scripts and Vitest tests
 - `copilot_core/` - data access, analysis, Gemini orchestration and
   persistence, with no web-framework imports
 - `tests/` - all Python tests, run with `uv run pytest`
