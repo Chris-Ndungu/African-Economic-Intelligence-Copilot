@@ -1,7 +1,7 @@
 # African Economic Intelligence Copilot
 ## MVP Product Scope and Technical Decisions
 
-**Status:** MVP scope agreed; tech stack selected (FastAPI + React)  
+**Status:** MVP scope agreed; tech stack selected (FastAPI with Jinja and HTMX)  
 **Primary audience:** Economic and data analysts  
 **Primary objective:** Investigate economic developments across African economies using reproducible statistical analysis and AI-assisted interpretation grounded in available data.
 
@@ -59,7 +59,7 @@ The copilot retrieves economic data, performs statistical analysis, presents int
 | Anomaly handling | Automatically compare historical patterns and relevant countries, then suggest data-grounded possible explanations |
 | Explanation strategy | Start with available economic data; distinguish correlation from causation |
 | AI provider | Google Gemini API |
-| Application stack | React (TypeScript) frontend + FastAPI backend + PostgreSQL, contract-first via OpenAPI |
+| Application stack | FastAPI serving Jinja pages and HTMX partials + a JSON API defined contract-first in OpenAPI + PostgreSQL |
 | Deployment | Public web demo on Google Cloud Run with separate dev and prod environments, plus authorized live-data mode |
 | Reviewer access | Both bundled demo data and live BigQuery mode for authorized users |
 | Analytical depth | Analyst-grade: historical baselines, lagged relationships, configurable anomaly methods, and drill-down analysis |
@@ -117,16 +117,22 @@ Delivery is ordered so that a complete, deployed, observable end-to-end system e
 
 These are implementation decisions. They can be revisited if repository inspection reveals a strong reason.
 
-### 4.1 Application architecture: FastAPI + React, contract-first
+### 4.1 Application architecture: FastAPI, Jinja and HTMX
 
-**Decision:** A React single-page application talks to a FastAPI backend through a committed OpenAPI contract. All data access, analytics, and AI orchestration live in a standalone Python package (`copilot_core`) that has no web-framework dependencies.
+**Decision:** FastAPI serves server-rendered Jinja pages and HTMX partials, and a JSON API defined contract-first in `api/openapi.yaml`. Both are thin routes over `copilot_core`, a standalone Python package that holds all data access, analytics, and AI orchestration and has no web-framework dependencies.
 
 ```text
-React + TypeScript (Vite, Tailwind, shadcn/ui, Plotly.js, TanStack Query)
+Browser
+  - Jinja-rendered HTML pages and HTMX partials
+  - HTMX with the SSE extension (investigation progress)
+  - Plotly.js charts drawn from figure JSON built in Python
+  - all vendored static files from /static/, nothing from a CDN
               |
-              |  JSON over HTTP + server-sent events (investigation progress)
+              |  HTML over HTTP + server-sent events
               v
-FastAPI (thin routes, auth, OpenAPI contract)
+FastAPI (one process)
+  - HTML routes: pages, /partials/..., /static/... (outside the contract)
+  - JSON API routes: /api/... and /health (in the OpenAPI contract)
               |
               v
 copilot_core
@@ -138,19 +144,22 @@ copilot_core
 ```
 
 **Why:**
-- It gives a clear separation between frontend, backend, and database.
-- It supports a contract-first workflow: frontend prototype → OpenAPI contract → FastAPI backend.
-- The OpenAPI spec is a shared contract that lets separate agents build the frontend, backend, and tests in parallel, which demonstrates AI-assisted multi-agent development.
-- AI tooling makes frontend scaffolding cheap, so React's higher UX ceiling costs little extra effort.
+- One language the owner can review end to end: every file is Python, HTML, CSS, plain JavaScript, or Markdown.
+- No Node toolchain and no frontend build step.
+- Pages render the same Pydantic results the API returns, so there are no separate frontend types to keep in sync.
+- The screen and the PDF share Jinja templates, the Python number formatter, and the Python chart builder, so the same value prints the same way everywhere.
+- One process serves the pages, the static files, and the API, which keeps local runs, tests, and deployment simple.
 - One trace can span browser → API → data layer → Gemini, which supports the observability criterion.
 
 **Alternatives considered:**
+- **React + TypeScript SPA (Vite, Tailwind, shadcn/ui, TanStack Query):** Rejected. The owner does not know React and must be able to review and own all the code, and it adds a second language and toolchain. This was the original choice, scaffolded in #9 and #10, and replaced by #74.
 - **Streamlit monolith:** Fastest to build, but it has no real frontend/backend split and it limits the multi-panel workspace.
-- **FastAPI + HTMX/Jinja:** Simpler single-language app with shared screen/PDF templates, but a weaker agent-team story and harder chart drill-down.
 - **Python full-stack frameworks (Reflex, Dash, NiceGUI):** More control than Streamlit, but smaller ecosystems and framework lock-in.
 
 **Rules:**
-- Write the OpenAPI spec first and commit it. Generate frontend types from it (`openapi-typescript`) instead of hand-writing them.
+- Write the OpenAPI spec first and commit it. The JSON API changes only after the contract does.
+- HTML routes are outside the OpenAPI contract and are registered with `include_in_schema=False`.
+- Templates and browser scripts display `copilot_core` results; they never compute new numbers.
 - FastAPI routes stay thin. Business logic belongs in `copilot_core`.
 - Pydantic models are the single source of truth for result objects, API schemas, Gemini tool schemas, stored JSON, and PDF content.
 
@@ -309,7 +318,7 @@ Operational alerting on the application's own health (section 4.12) is separate 
 
 ### 4.10 Testing
 
-**Decision:** Three test layers. Python tests live in `tests/`, and unit, integration, and end-to-end tests (Playwright for Python via pytest-playwright) all run with one command, `uv run pytest`, and in CI. Frontend component tests run with `npm test`.
+**Decision:** Three test layers. Python tests live in `tests/`, and unit, integration, and end-to-end tests (Playwright for Python via pytest-playwright) all run with one command, `uv run pytest`, and in CI. There is no `npm test`: templates and partials are tested with pytest and FastAPI TestClient, and browser behaviour with Playwright.
 
 | Layer | Tooling | Covers |
 |---|---|---|
@@ -322,8 +331,8 @@ Tests must not call the real Gemini API or BigQuery by default. Use recorded or 
 ### 4.11 Containerization and deployment
 
 **Decision:**
-- `docker compose up` starts the full local system: frontend, API, Postgres, and the observability stack (`grafana/otel-lgtm`).
-- The frontend is built as static assets and served by the API container (or a small static container), so deployment is a single Cloud Run service per environment.
+- `docker compose up` starts the full local system: the API, Postgres, and the observability stack (`grafana/otel-lgtm`). There is no separate frontend service.
+- There is no frontend build or frontend container: FastAPI serves the pages, the static files, and the API from one process, so deployment is a single Cloud Run service per environment.
 - Two environments on Google Cloud Run: **dev** and **prod**, with separate secrets and databases.
 - Secrets live in Google Secret Manager and never in the repository, images, logs, or reports.
 
@@ -337,7 +346,7 @@ Keep the architecture small. Do not introduce Kubernetes, microservices, a messa
 
 **Decision:** GitHub Actions.
 
-1. **On every pull request:** lint (ruff, ESLint), type checks (mypy, tsc), and the full test suite.
+1. **On every pull request:** lint (ruff), type checks (mypy), and the full test suite, which also validates the OpenAPI contract and the vendored-file checksums. There is no ESLint, tsc, or Node step.
 2. **On merge to `main`:** build the image, push it to Artifact Registry, and deploy automatically to **dev**.
 3. **Promotion to prod:** a manually approved workflow (GitHub Environments protection rule) deploys a versioned release tag to **prod**.
 
@@ -348,7 +357,7 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 **Decision:** Instrument with OpenTelemetry and view in Grafana.
 
 - **Key user journey:** "run an investigation" (browser → API → data service → analytics → Gemini → Postgres).
-- **Traces:** OTel instrumentation for the browser, FastAPI, SQLAlchemy, and data service, plus custom spans for each analysis tool and each Gemini call (following OpenTelemetry GenAI semantic conventions: model, token counts, latency, and tool calls).
+- **Traces:** browser tracing with a small hand-written script that propagates W3C trace context (no OpenTelemetry web SDK, which would need a JavaScript build; see #44), OTel instrumentation for FastAPI, SQLAlchemy, and data service, plus custom spans for each analysis tool and each Gemini call (following OpenTelemetry GenAI semantic conventions: model, token counts, latency, and tool calls).
 - **Metrics:** investigation count, success/failure rate, end-to-end latency, Gemini latency and token usage, and BigQuery bytes processed.
 - **Logs:** structured JSON logs carrying the trace ID.
 - **Privacy:** no credentials, API keys, or raw user questions in telemetry. Log investigation IDs and metadata instead.
@@ -376,11 +385,11 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 |---|---|---|
 | PM agent | Turns requirements into specs and issues with acceptance criteria | plan.md → specs, issues |
 | Backend agent | Implements `copilot_core` and FastAPI routes against the contract | issue + OpenAPI → backend PR |
-| Frontend agent | Implements UI against the contract and generated types | issue + OpenAPI → frontend PR |
+| Frontend agent | Implements the UI in Jinja templates, HTMX partials, CSS, and small plain-JavaScript files, rendering `copilot_core` results | issue + `copilot_core` result models → frontend PR |
 | QA agent | Writes and maintains integration and Playwright tests from acceptance criteria | acceptance criteria → test PR |
 | Ops agent | Owns CI/CD, telemetry, alerts, and on-call response | alerts + telemetry → fix PR |
 
-- **Collaboration:** Work proceeds one GitHub issue at a time. The OpenAPI contract is the hand-off point between backend and frontend work. The QA agent tests against acceptance criteria, not implementation details. A human reviews and merges every PR.
+- **Collaboration:** Work proceeds one GitHub issue at a time. The `copilot_core` result models are the hand-off between backend and frontend; the OpenAPI contract is the hand-off between the API and its clients and tests. The QA agent tests against acceptance criteria, not implementation details. A human reviews and merges every PR.
 - **Reusable capabilities:** Project skills (`SKILL.md`) for repeated tasks such as "add an analysis tool", "add an API endpoint", and "add a Playwright journey", plus subagent definitions for the roles above.
 
 ---
@@ -454,7 +463,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 
 ### Phase 2 — Contract and walking skeleton
 - Write the OpenAPI contract for investigations, analyses, history, and reports.
-- Scaffold the React app, FastAPI app, `copilot_core`, Postgres with Alembic, and Docker Compose.
+- Scaffold the FastAPI app with the Jinja and HTMX workspace shell, `copilot_core`, Postgres with Alembic, and Docker Compose.
 - Wire one thin end-to-end path: select country and indicator → trend result → chart → saved investigation.
 - Add CI (tests on PR) and deploy to dev on Cloud Run.
 
@@ -513,7 +522,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 ## 8. Technical principles and implementation guardrails
 
 1. **Inspect actual schemas before coding queries.** Do not assume the existing warehouse contains fields or models that have not been verified.
-2. **Contract first.** Change the OpenAPI spec before changing API behavior; regenerate frontend types from it.
+2. **Contract first.** Change the OpenAPI spec before changing API behavior.
 3. **Use a data-access abstraction.** Keep BigQuery- and DuckDB-specific operations out of the UI, API routes, and AI orchestration code.
 4. **Keep analytics deterministic where possible.** Implement calculations in tested functions.
 5. **Use structured outputs.** Each finding should include the metric, value, unit, period, geography, method, source, and caveat where applicable.

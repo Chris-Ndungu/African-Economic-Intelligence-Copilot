@@ -88,7 +88,9 @@ def test_endpoint_skill_states_its_rules():
     text = flat(read(skill("add-api-endpoint")))
     for phrase in (
         "Edit the OpenAPI contract first",
-        "npm run gen-types",
+        "Validate the contract with `uv run pytest tests/test_web.py`",
+        "`openapi-spec-validator`",
+        "registered with `include_in_schema=False`",
         "Routes stay thin",
         "Put the logic in `copilot_core`",
         "FastAPI `TestClient`",
@@ -96,6 +98,22 @@ def test_endpoint_skill_states_its_rules():
         "At least one integration test for an error case",
     ):
         assert phrase in text, phrase
+
+
+def test_endpoint_skill_has_no_type_generation_step():
+    _, body = front_matter(skill("add-api-endpoint"))
+    done = heading_section(body, "Done when")
+    assert "- [ ] `api/openapi.yaml` was edited before the route, and it validates" in done
+    assert "types" not in flat(heading_section(body, "Steps")).lower()
+    assert "types" not in done.lower()
+
+
+ARCHITECTURE_LINK = "plan.md#41-application-architecture-fastapi-jinja-and-htmx"
+
+
+@pytest.mark.parametrize("name", ["add-analysis-function", "add-api-endpoint"])
+def test_skill_links_the_current_architecture_section(name):
+    assert ARCHITECTURE_LINK in read(skill(name))
 
 
 def test_playwright_skill_states_its_rules():
@@ -115,7 +133,7 @@ def test_playwright_skill_states_its_rules():
         ("add-analysis-function", "copilot_core/analysis/", "#16"),
         ("add-api-endpoint", "backend.main:app", "#8"),
         ("add-api-endpoint", "api/openapi.yaml", "#10"),
-        ("add-api-endpoint", "npm run gen-types", "#10"),
+        ("add-api-endpoint", "openapi-spec-validator", "#74"),
         ("add-playwright-journey", "tests/e2e/", "#34"),
     ],
 )
@@ -158,6 +176,23 @@ def test_subagent_says_a_human_merges_and_it_must_not(name):
     body = flat(read(agent(name)))
     assert "A human reviews and merges every PR" in body
     assert "You must never merge a PR" in body
+
+
+def test_frontend_agent_renders_core_results_with_jinja_and_htmx():
+    fields, body = front_matter(agent("frontend"))
+    assert "Jinja templates and HTMX" in fields["description"]
+    assert "React" not in fields["description"]
+    body = flat(body)
+    for phrase in (
+        "Render the `copilot_core` results",
+        "never compute numbers in templates or scripts",
+        "Keep HTML routes out of the OpenAPI contract",
+        "do not work around it",
+        "Show demo data as demo data",
+        "never as zero",
+    ):
+        assert phrase in body, phrase
+    assert "TypeScript" not in body
 
 
 def test_pm_links_its_role_doc_without_copying_it():

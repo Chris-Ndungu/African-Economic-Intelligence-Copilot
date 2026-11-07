@@ -43,7 +43,7 @@ and [section 4.5](../../../_docs/plan.md#45-separate-statistical-findings-from-a
   any other web framework ([`_docs/AGENTS.md`](../../../_docs/AGENTS.md))
 - It returns the Pydantic result models from #11; Pydantic models are the
   single source of truth for results
-  ([`_docs/plan.md` section 4.1](../../../_docs/plan.md#41-application-architecture-fastapi--react-contract-first))
+  ([`_docs/plan.md` section 4.1](../../../_docs/plan.md#41-application-architecture-fastapi-jinja-and-htmx))
 - Follow the guardrails in
   [`_docs/plan.md` section 8](../../../_docs/plan.md#8-technical-principles-and-implementation-guardrails),
   especially units and frequency, missingness, and structured outputs
