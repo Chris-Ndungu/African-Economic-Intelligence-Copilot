@@ -20,7 +20,9 @@ It defines:
   export one as a PDF
 - Result schemas: `Finding`, `Series`, `ComparisonResult`, `BaselineResult`
   and `AnomalyResult`. Each number carries its value, unit, period,
-  geography, method, source and caveats (`NumericResult`)
+  geography, method, source and caveats (`NumericResult`). The Pydantic
+  models in `copilot_core/models.py` implement them; `SourceRef` and
+  `SeriesResult` there are `Source` and `Series` here
 
 Lint it from the repository root:
 
