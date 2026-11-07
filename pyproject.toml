@@ -4,10 +4,15 @@ version = "0.1.0"
 description = "The African Economic Intelligence Copilot is an AI-powered economic investigation workspace for analysts studying African economies."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.1",
+    "pydantic-settings>=2.16.2",
+    "uvicorn>=0.54.0",
+]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.2.0",
 ]
 
