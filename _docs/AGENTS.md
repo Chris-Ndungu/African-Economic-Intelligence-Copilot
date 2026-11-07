@@ -19,6 +19,9 @@ Commands
 - `npm test` - run the frontend Vitest suite (run from `frontend/`)
 - `npm run lint` - lint the frontend with ESLint, failing on any warning (run from `frontend/`)
 - `npm run build` - type-check and build the frontend into `frontend/dist/` (run from `frontend/`)
+- `npm run gen-types` - regenerate `frontend/src/api/schema.d.ts` from `api/openapi.yaml` (run from `frontend/`)
+- `npm run check-types` - fail if `frontend/src/api/schema.d.ts` is out of date with the contract (run from `frontend/`)
+- `npx @redocly/cli lint api/openapi.yaml` - lint the OpenAPI contract
 
 Rules
 
@@ -28,6 +31,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `api/` - the OpenAPI contract, `api/openapi.yaml`
 - `backend/` - FastAPI application: thin routes, settings, no business logic
 - `frontend/` - React + TypeScript app (Vite, Tailwind, shadcn/ui), with its own npm scripts and Vitest tests
 - `copilot_core/` - data access, analysis, Gemini orchestration and

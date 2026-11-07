@@ -68,7 +68,6 @@ def test_placeholders_name_the_issue_that_fills_them():
     expected = {
         "architecture.md": "#54",
         "data-contract.md": "#5 and #6",
-        "api.md": "#10",
     }
     for name, issue in expected.items():
         text = (DOCS / name).read_text(encoding="utf-8")
@@ -90,3 +89,26 @@ def test_layout_matches_repository_root():
 def test_root_pointers_load_agents_md():
     assert "@_docs/AGENTS.md" in (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "_docs/AGENTS.md" in (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_api_md_documents_the_contract_and_its_conventions():
+    text = (DOCS / "api.md").read_text(encoding="utf-8")
+    assert "Filled in by" not in text
+    for phrase in (
+        "api/openapi.yaml",
+        "The OpenAPI contract changes before API behavior does",
+        "npm run gen-types",
+        "npm run check-types",
+        "`data_mode`",
+        "`Error`",
+        "`503`",
+        "`null`, never `0`",
+        "plan.md",
+    ):
+        assert phrase in text, phrase
+
+
+def test_commands_include_type_generation():
+    commands = section("Commands")
+    assert "- `npm run gen-types` -" in commands
+    assert "- `npm run check-types` -" in commands
