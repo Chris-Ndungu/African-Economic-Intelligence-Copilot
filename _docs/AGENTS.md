@@ -35,6 +35,7 @@ Repository layout
 - `.python-version` - Python version used by `uv`
 - `.gitignore` - files Git ignores
 - `.github/` - GitHub issue and pull request templates
+- `.claude/` - Claude Code project skills and subagent definitions
 
 Conventions
 
@@ -45,6 +46,17 @@ Conventions
 - The OpenAPI contract changes before API behavior does
 - Follow the implementation guardrails in section 8 of
   [plan.md](plan.md#8-technical-principles-and-implementation-guardrails)
+
+Skills and subagents
+
+- [.claude/skills/add-analysis-function/SKILL.md](../.claude/skills/add-analysis-function/SKILL.md) - skill: add a tested, deterministic analysis function in `copilot_core`
+- [.claude/skills/add-api-endpoint/SKILL.md](../.claude/skills/add-api-endpoint/SKILL.md) - skill: add an endpoint, contract first, with a thin route and a `TestClient` test
+- [.claude/skills/add-playwright-journey/SKILL.md](../.claude/skills/add-playwright-journey/SKILL.md) - skill: add an end-to-end journey on demo data with stubbed Gemini
+- [.claude/agents/pm.md](../.claude/agents/pm.md) - PM subagent: grooms requirements into issues with checkable acceptance criteria
+- [.claude/agents/backend.md](../.claude/agents/backend.md) - backend subagent: implements `copilot_core` and FastAPI routes against the contract
+- [.claude/agents/frontend.md](../.claude/agents/frontend.md) - frontend subagent: implements the UI against the contract and generated types
+- [.claude/agents/qa.md](../.claude/agents/qa.md) - QA subagent: writes tests from acceptance criteria, editing only `tests/`
+- [.claude/agents/ops.md](../.claude/agents/ops.md) - ops subagent: owns CI/CD, telemetry, alerts and fix PRs
 
 Documents
 

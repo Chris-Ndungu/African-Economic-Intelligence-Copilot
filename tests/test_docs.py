@@ -82,7 +82,7 @@ def test_layout_matches_repository_root():
         for name in re.findall(r"^- `([^`]+)`", section("Repository layout"), re.M)
     }
     present = {p.name for p in ROOT.iterdir() if not p.name.startswith(".")}
-    present |= {p.name for p in ROOT.iterdir() if p.name in {".gitignore", ".python-version", ".github"}}
+    present |= {p.name for p in ROOT.iterdir() if p.name in {".gitignore", ".python-version", ".github", ".claude"}}
     assert listed - present == set(), "layout lists paths that do not exist"
     assert present - listed == set(), "layout is missing top-level paths"
 
