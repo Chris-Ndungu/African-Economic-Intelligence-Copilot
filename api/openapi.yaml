@@ -1,0 +1,1421 @@
+openapi: 3.1.0
+info:
+  title: African Economic Intelligence Copilot API
+  version: 0.1.0
+  summary: Contract between the React workspace and the FastAPI backend.
+  description: |
+    The OpenAPI contract for the investigation workspace. It changes before
+    the API behavior does; frontend types are generated from it with
+    `openapi-typescript` (see `_docs/api.md`).
+
+    Conventions used by every operation:
+
+    - Every response that returns data includes `data_mode`, `demo` (bundled
+      sample snapshot) or `live` (curated BigQuery data).
+    - A missing value is `null`, never `0`. Fields that can be missing say so.
+    - Every 4xx and 5xx response uses the shared `Error` schema. `503` means
+      Gemini, the data service or the database is unavailable, and the
+      `service` field names which one.
+
+    The data-related schemas (countries, indicators, coverage, units and
+    result fields) are based on `_docs/plan.md`. They will be revised through
+    this contract once `_docs/data-contract.md` documents the curated models.
+    Example values are illustrative, not real statistics.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+security: []
+tags:
+  - name: health
+    description: Liveness of the API process.
+  - name: reference
+    description: Countries, indicators and data coverage available for investigation.
+  - name: investigations
+    description: Run, save, list, update and export investigations.
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness check
+      description: >-
+        Reports that the API process is up. It does not touch Postgres,
+        Gemini or BigQuery and returns no data, so it has no `data_mode`.
+      responses:
+        "200":
+          description: The API process is up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              examples:
+                ok:
+                  summary: Healthy
+                  value:
+                    status: ok
+
+  /api/countries:
+    get:
+      tags: [reference]
+      operationId: listCountries
+      summary: List countries
+      description: Lists the countries present in the active data source.
+      responses:
+        "200":
+          description: The countries available for investigation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountryList"
+              examples:
+                demo:
+                  summary: Countries in demo mode
+                  value:
+                    data_mode: demo
+                    countries:
+                      - code: KEN
+                        name: Kenya
+                        region: Eastern Africa
+                      - code: NGA
+                        name: Nigeria
+                        region: Western Africa
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/indicators:
+    get:
+      tags: [reference]
+      operationId: listIndicators
+      summary: List indicators
+      description: Lists the indicators present in the active data source, with their units and frequency.
+      responses:
+        "200":
+          description: The indicators available for investigation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IndicatorList"
+              examples:
+                demo:
+                  summary: Indicators in demo mode
+                  value:
+                    data_mode: demo
+                    indicators:
+                      - code: inflation_cpi
+                        name: Consumer price inflation
+                        category: inflation
+                        unit: percent
+                        frequency: annual
+                        description: Annual percentage change in the consumer price index.
+                        source:
+                          id: mart_inflation
+                          name: Consumer price inflation
+                          provider: IMF
+                          url: null
+                          last_updated: "2026-06-30"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/coverage:
+    get:
+      tags: [reference]
+      operationId: getCoverage
+      summary: Get data coverage
+      description: >-
+        Returns, for each country and indicator pair, the periods covered and
+        how many observations are missing. Without filters it returns every
+        pair in the active data source.
+      parameters:
+        - name: country
+          in: query
+          description: ISO 3166-1 alpha-3 country codes to filter by. Repeat the parameter for several.
+          required: false
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/CountryCode"
+        - name: indicator
+          in: query
+          description: Indicator codes to filter by. Repeat the parameter for several.
+          required: false
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/IndicatorCode"
+      responses:
+        "200":
+          description: Coverage for the requested countries and indicators.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Coverage"
+              examples:
+                kenyaInflation:
+                  summary: Coverage of Kenya inflation
+                  value:
+                    data_mode: demo
+                    entries:
+                      - country_code: KEN
+                        indicator_code: inflation_cpi
+                        frequency: annual
+                        first_period: "2000"
+                        last_period: "2023"
+                        observation_count: 23
+                        missing_count: 1
+                        last_updated: "2026-06-30"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations/run:
+    post:
+      tags: [investigations]
+      operationId: runInvestigation
+      summary: Run an investigation
+      description: >-
+        Computes the requested analysis in Python and asks Gemini to
+        interpret the computed results. The result is not saved; save it with
+        `saveInvestigation`. If Gemini or the data service is unavailable the
+        call fails with `503` rather than returning an uninterpreted or
+        fabricated answer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestigationRequest"
+            examples:
+              anomaly:
+                summary: Investigate Kenya inflation for anomalies
+                value:
+                  question: Why did inflation in Kenya rise in 2022?
+                  investigation_type: anomaly
+                  countries: [KEN, NGA]
+                  indicators: [inflation_cpi]
+                  period:
+                    start: "2018"
+                    end: "2023"
+                  parameters:
+                    baseline_periods: 4
+                    anomaly_method: z_score
+                    anomaly_threshold: 2
+      responses:
+        "200":
+          description: The computed results and Gemini's interpretation of them.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestigationResult"
+              examples:
+                anomaly:
+                  $ref: "#/components/examples/InvestigationResultExample"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations:
+    get:
+      tags: [investigations]
+      operationId: listInvestigations
+      summary: List saved investigations
+      description: >-
+        Lists saved investigations, most recently updated first. Pagination is
+        cursor-based: pass `next_cursor` from one page as `cursor` to get the
+        next. `next_cursor` is `null` on the last page.
+      parameters:
+        - name: limit
+          in: query
+          description: Page size. Defaults to 20; the maximum is 100.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          description: Opaque cursor from a previous page's `next_cursor`. Omit it for the first page.
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of saved investigations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestigationList"
+              examples:
+                firstPage:
+                  summary: First page with more to follow
+                  value:
+                    data_mode: demo
+                    items:
+                      - id: 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f
+                        title: Kenya inflation 2022
+                        data_mode: demo
+                        investigation_type: anomaly
+                        countries: [KEN, NGA]
+                        indicators: [inflation_cpi]
+                        created_at: "2026-11-07T10:15:00Z"
+                        updated_at: "2026-11-07T10:20:00Z"
+                    limit: 20
+                    next_cursor: eyJ1cGRhdGVkX2F0IjoiMjAyNi0xMS0wN1QxMDoyMDowMFoifQ
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags: [investigations]
+      operationId: saveInvestigation
+      summary: Save an investigation
+      description: Saves an investigation request and its result to the investigation history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestigationCreate"
+      responses:
+        "201":
+          description: The saved investigation.
+          headers:
+            Location:
+              description: URL of the saved investigation.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Investigation"
+              examples:
+                saved:
+                  $ref: "#/components/examples/InvestigationExample"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations/{investigation_id}:
+    parameters:
+      - $ref: "#/components/parameters/InvestigationId"
+    get:
+      tags: [investigations]
+      operationId: getInvestigation
+      summary: Fetch a saved investigation
+      description: Returns a saved investigation with its request and result.
+      responses:
+        "200":
+          description: The saved investigation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Investigation"
+              examples:
+                saved:
+                  $ref: "#/components/examples/InvestigationExample"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    patch:
+      tags: [investigations]
+      operationId: updateInvestigation
+      summary: Update a saved investigation
+      description: >-
+        Updates the fields given, for example a new title, or a new request
+        and result when the analyst continues the investigation. Fields left
+        out keep their values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestigationUpdate"
+            examples:
+              rename:
+                summary: Rename an investigation
+                value:
+                  title: Kenya and Nigeria inflation, 2018-2023
+      responses:
+        "200":
+          description: The updated investigation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Investigation"
+              examples:
+                updated:
+                  $ref: "#/components/examples/InvestigationExample"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations/{investigation_id}/report:
+    parameters:
+      - $ref: "#/components/parameters/InvestigationId"
+    get:
+      tags: [investigations]
+      operationId: exportInvestigationPdf
+      summary: Export an investigation as PDF
+      description: >-
+        Renders a PDF report from the stored investigation result: findings,
+        charts, methodology, sources, caveats and the generation time. It
+        does not ask Gemini for a new answer. The report is labelled with its
+        data mode, which is also returned in the `X-Data-Mode` header.
+      responses:
+        "200":
+          description: The PDF report.
+          headers:
+            X-Data-Mode:
+              description: The data mode of the investigation in the report.
+              schema:
+                $ref: "#/components/schemas/DataMode"
+            Content-Disposition:
+              description: Suggested file name, for example `attachment; filename="investigation-7f9c2b1e.pdf"`.
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                contentMediaType: application/pdf
+              examples:
+                report:
+                  summary: A PDF file (binary, truncated)
+                  value: "%PDF-1.7 ..."
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+components:
+  parameters:
+    InvestigationId:
+      name: investigation_id
+      in: path
+      required: true
+      description: Identifier of a saved investigation.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: The request is invalid, for example an unknown country code or a period whose start is after its end.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            validation:
+              summary: Invalid request
+              value:
+                code: validation_error
+                message: The request is invalid.
+                service: null
+                details:
+                  - field: countries.0
+                    message: Unknown country code "XXX".
+    NotFound:
+      description: No saved investigation has this identifier.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notFound:
+              summary: Unknown investigation
+              value:
+                code: not_found
+                message: Investigation 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f was not found.
+                service: null
+                details: []
+    InternalError:
+      description: An unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            internal:
+              summary: Unexpected error
+              value:
+                code: internal_error
+                message: An unexpected error occurred.
+                service: null
+                details: []
+    ServiceUnavailable:
+      description: >-
+        A service the operation depends on is unavailable: Gemini, the data
+        service (DuckDB or BigQuery) or the investigation database. `service`
+        names which one.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            gemini:
+              summary: Gemini unavailable
+              value:
+                code: service_unavailable
+                message: Gemini is unavailable, so the results could not be interpreted.
+                service: gemini
+                details: []
+            dataService:
+              summary: Data service unavailable
+              value:
+                code: service_unavailable
+                message: The data service is unavailable.
+                service: data_service
+                details: []
+
+  examples:
+    InvestigationResultExample:
+      summary: Anomaly investigation of Kenya inflation (illustrative values)
+      value:
+        data_mode: demo
+        request:
+          question: Why did inflation in Kenya rise in 2022?
+          investigation_type: anomaly
+          countries: [KEN, NGA]
+          indicators: [inflation_cpi]
+          period:
+            start: "2018"
+            end: "2023"
+          parameters:
+            baseline_periods: 4
+            anomaly_method: z_score
+            anomaly_threshold: 2
+        findings:
+          - id: finding-1
+            kind: anomaly
+            metric: inflation_cpi
+            statement: Kenya's 2022 inflation of 7.7% is 3.98 standard deviations above its 2018-2021 mean of 5.35%.
+            value: 7.7
+            unit: percent
+            period:
+              start: "2022"
+              end: "2022"
+              frequency: annual
+            geography:
+              country_code: KEN
+              country_name: Kenya
+            method:
+              name: z_score
+              description: Distance from the baseline mean in baseline standard deviations.
+              parameters:
+                baseline_periods: 4
+                threshold: 2
+            source:
+              id: mart_inflation
+              name: Consumer price inflation
+              provider: IMF
+              url: null
+              last_updated: "2026-06-30"
+            caveats:
+              - The 2023 value is missing, so the baseline cannot show whether the rise persisted.
+            result_ids: [anomaly-1, baseline-1]
+        series:
+          - id: series-1
+            metric: inflation_cpi
+            unit: percent
+            period:
+              start: "2018"
+              end: "2023"
+              frequency: annual
+            geography:
+              country_code: KEN
+              country_name: Kenya
+            method:
+              name: observed
+              description: Values as published, without transformation.
+              parameters: {}
+            source:
+              id: mart_inflation
+              name: Consumer price inflation
+              provider: IMF
+              url: null
+              last_updated: "2026-06-30"
+            caveats:
+              - 2023 is missing in the source.
+            points:
+              - period: "2018"
+                value: 4.7
+              - period: "2019"
+                value: 5.2
+              - period: "2020"
+                value: 5.4
+              - period: "2021"
+                value: 6.1
+              - period: "2022"
+                value: 7.7
+              - period: "2023"
+                value: null
+        comparisons:
+          - id: comparison-1
+            metric: inflation_cpi
+            method:
+              name: rank_by_value
+              description: Countries ranked by value for the period, highest first.
+              parameters: {}
+            entries:
+              - value: 18.8
+                unit: percent
+                period:
+                  start: "2022"
+                  end: "2022"
+                  frequency: annual
+                geography:
+                  country_code: NGA
+                  country_name: Nigeria
+                method:
+                  name: rank_by_value
+                  description: Countries ranked by value for the period, highest first.
+                  parameters: {}
+                source:
+                  id: mart_inflation
+                  name: Consumer price inflation
+                  provider: IMF
+                  url: null
+                  last_updated: "2026-06-30"
+                caveats: []
+                rank: 1
+              - value: 7.7
+                unit: percent
+                period:
+                  start: "2022"
+                  end: "2022"
+                  frequency: annual
+                geography:
+                  country_code: KEN
+                  country_name: Kenya
+                method:
+                  name: rank_by_value
+                  description: Countries ranked by value for the period, highest first.
+                  parameters: {}
+                source:
+                  id: mart_inflation
+                  name: Consumer price inflation
+                  provider: IMF
+                  url: null
+                  last_updated: "2026-06-30"
+                caveats: []
+                rank: 2
+        baselines:
+          - id: baseline-1
+            metric: inflation_cpi
+            value: 7.7
+            unit: percent
+            period:
+              start: "2022"
+              end: "2022"
+              frequency: annual
+            geography:
+              country_code: KEN
+              country_name: Kenya
+            method:
+              name: historical_mean
+              description: Mean of the preceding periods.
+              parameters:
+                baseline_periods: 4
+            source:
+              id: mart_inflation
+              name: Consumer price inflation
+              provider: IMF
+              url: null
+              last_updated: "2026-06-30"
+            caveats: []
+            baseline_value: 5.35
+            baseline_period:
+              start: "2018"
+              end: "2021"
+              frequency: annual
+            difference: 2.35
+            percent_difference: 43.93
+        anomalies:
+          - id: anomaly-1
+            metric: inflation_cpi
+            value: 7.7
+            unit: percent
+            period:
+              start: "2022"
+              end: "2022"
+              frequency: annual
+            geography:
+              country_code: KEN
+              country_name: Kenya
+            method:
+              name: z_score
+              description: Distance from the baseline mean in baseline standard deviations.
+              parameters:
+                baseline_periods: 4
+                threshold: 2
+            source:
+              id: mart_inflation
+              name: Consumer price inflation
+              provider: IMF
+              url: null
+              last_updated: "2026-06-30"
+            caveats: []
+            is_anomaly: true
+            score: 3.98
+            threshold: 2
+            expected_value: 5.35
+            direction: above
+        interpretation:
+          summary: Kenya's inflation rose sharply in 2022, well above its recent baseline, though it stayed far below Nigeria's.
+          statements:
+            - text: The 2022 rise in Kenya's inflation is unusual relative to 2018-2021.
+              label: observation
+              finding_ids: [finding-1]
+            - text: The rise may reflect pressures shared across the region, since Nigeria's inflation was also high in 2022; the data shows association, not cause.
+              label: hypothesis
+              finding_ids: [finding-1]
+          caveats:
+            - Explanations are limited to the indicators in the data source.
+          model: gemini
+        sources:
+          - id: mart_inflation
+            name: Consumer price inflation
+            provider: IMF
+            url: null
+            last_updated: "2026-06-30"
+        caveats:
+          - Demo mode uses a bundled sample snapshot, not live data.
+        generated_at: "2026-11-07T10:15:00Z"
+    InvestigationExample:
+      summary: A saved investigation (result shortened)
+      value:
+        id: 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f
+        title: Kenya inflation 2022
+        data_mode: demo
+        request:
+          question: Why did inflation in Kenya rise in 2022?
+          investigation_type: anomaly
+          countries: [KEN]
+          indicators: [inflation_cpi]
+          period:
+            start: "2018"
+            end: "2023"
+          parameters:
+            baseline_periods: 4
+            anomaly_method: z_score
+            anomaly_threshold: 2
+        result:
+          data_mode: demo
+          request:
+            question: Why did inflation in Kenya rise in 2022?
+            investigation_type: anomaly
+            countries: [KEN]
+            indicators: [inflation_cpi]
+            period:
+              start: "2018"
+              end: "2023"
+            parameters:
+              baseline_periods: 4
+              anomaly_method: z_score
+              anomaly_threshold: 2
+          findings: []
+          series: []
+          comparisons: []
+          baselines: []
+          anomalies: []
+          interpretation:
+            summary: The shortened example has no findings to interpret.
+            statements: []
+            caveats: []
+            model: gemini
+          sources: []
+          caveats: []
+          generated_at: "2026-11-07T10:15:00Z"
+        created_at: "2026-11-07T10:15:00Z"
+        updated_at: "2026-11-07T10:20:00Z"
+
+  schemas:
+    Health:
+      type: object
+      description: Liveness status, as returned by `GET /health`.
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    DataMode:
+      type: string
+      enum: [demo, live]
+      description: >-
+        Where the data came from. `demo` is the bundled sample snapshot and
+        must be labelled as sample data; `live` is curated BigQuery data for
+        authorized users.
+
+    Error:
+      type: object
+      description: The shared error body for every 4xx and 5xx response.
+      required: [code, message, service, details]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+          enum: [validation_error, not_found, service_unavailable, internal_error]
+        message:
+          type: string
+          description: Human-readable explanation of the error.
+        service:
+          type: [string, "null"]
+          description: >-
+            The service that failed, or `null` when the error is not caused by
+            an unavailable service. Set on every `503`.
+          enum: [gemini, data_service, database, null]
+        details:
+          type: array
+          description: Per-field problems for `validation_error`; empty otherwise.
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    ErrorDetail:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: Dotted path of the invalid field, for example `countries.0` or `period.start`.
+        message:
+          type: string
+
+    CountryCode:
+      type: string
+      description: ISO 3166-1 alpha-3 country code.
+      pattern: "^[A-Z]{3}$"
+      examples: [KEN]
+    IndicatorCode:
+      type: string
+      description: Identifier of an indicator, as returned by `listIndicators`.
+      pattern: "^[a-z0-9_]+$"
+      examples: [inflation_cpi]
+    Frequency:
+      type: string
+      enum: [annual, quarterly, monthly]
+    PeriodLabel:
+      type: string
+      description: >-
+        A period: `YYYY` for annual, `YYYY-Qn` for quarterly or `YYYY-MM` for
+        monthly data.
+      pattern: "^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2]))?$"
+      examples: ["2022"]
+
+    Country:
+      type: object
+      required: [code, name, region]
+      properties:
+        code:
+          $ref: "#/components/schemas/CountryCode"
+        name:
+          type: string
+        region:
+          type: [string, "null"]
+          description: African sub-region, or `null` when the source does not record one.
+    CountryList:
+      type: object
+      required: [data_mode, countries]
+      properties:
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        countries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Country"
+
+    Indicator:
+      type: object
+      required: [code, name, category, unit, frequency, description, source]
+      properties:
+        code:
+          $ref: "#/components/schemas/IndicatorCode"
+        name:
+          type: string
+        category:
+          type: string
+          description: The MVP indicator group this indicator belongs to.
+          enum: [gdp, inflation, exchange_rate, interest_rate, trade]
+        unit:
+          type: string
+          description: Unit of the values, for example `percent`, `USD millions` or `local currency per USD`.
+        frequency:
+          $ref: "#/components/schemas/Frequency"
+        description:
+          type: [string, "null"]
+          description: Definition of the indicator, or `null` when the source gives none.
+        source:
+          $ref: "#/components/schemas/Source"
+    IndicatorList:
+      type: object
+      required: [data_mode, indicators]
+      properties:
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        indicators:
+          type: array
+          items:
+            $ref: "#/components/schemas/Indicator"
+
+    CoverageEntry:
+      type: object
+      description: Coverage of one indicator for one country.
+      required:
+        - country_code
+        - indicator_code
+        - frequency
+        - first_period
+        - last_period
+        - observation_count
+        - missing_count
+        - last_updated
+      properties:
+        country_code:
+          $ref: "#/components/schemas/CountryCode"
+        indicator_code:
+          $ref: "#/components/schemas/IndicatorCode"
+        frequency:
+          $ref: "#/components/schemas/Frequency"
+        first_period:
+          description: First period with a value, or `null` when there are no observations.
+          oneOf:
+            - $ref: "#/components/schemas/PeriodLabel"
+            - type: "null"
+        last_period:
+          description: Last period with a value, or `null` when there are no observations.
+          oneOf:
+            - $ref: "#/components/schemas/PeriodLabel"
+            - type: "null"
+        observation_count:
+          type: integer
+          minimum: 0
+          description: Number of periods with a value.
+        missing_count:
+          type: integer
+          minimum: 0
+          description: Number of periods between `first_period` and `last_period` with no value. Missing values are not counted as zero.
+        last_updated:
+          type: [string, "null"]
+          format: date
+          description: When the source last updated this series, or `null` if unknown.
+    Coverage:
+      type: object
+      required: [data_mode, entries]
+      properties:
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoverageEntry"
+
+    Period:
+      type: object
+      description: The period a result covers, from `start` to `end` inclusive.
+      required: [start, end, frequency]
+      properties:
+        start:
+          $ref: "#/components/schemas/PeriodLabel"
+        end:
+          $ref: "#/components/schemas/PeriodLabel"
+        frequency:
+          $ref: "#/components/schemas/Frequency"
+    PeriodRange:
+      type: object
+      description: A requested period, from `start` to `end` inclusive. `start` must not be after `end`.
+      required: [start, end]
+      properties:
+        start:
+          $ref: "#/components/schemas/PeriodLabel"
+        end:
+          $ref: "#/components/schemas/PeriodLabel"
+    Geography:
+      type: object
+      required: [country_code, country_name]
+      properties:
+        country_code:
+          $ref: "#/components/schemas/CountryCode"
+        country_name:
+          type: string
+    Method:
+      type: object
+      description: The calculation that produced a result and the parameters it used.
+      required: [name, description, parameters]
+      properties:
+        name:
+          type: string
+          description: Identifier of the method, for example `z_score` or `historical_mean`.
+        description:
+          type: string
+        parameters:
+          type: object
+          description: Parameter names and the values used.
+          additionalProperties: true
+    Source:
+      type: object
+      description: Lineage of the data behind a result.
+      required: [id, name, provider, url, last_updated]
+      properties:
+        id:
+          type: string
+          description: Identifier of the curated dataset or model.
+        name:
+          type: string
+        provider:
+          type: [string, "null"]
+          description: Original publisher, for example `IMF`, or `null` if unknown.
+        url:
+          type: [string, "null"]
+          format: uri
+          description: Link to the original source, or `null` if there is none.
+        last_updated:
+          type: [string, "null"]
+          format: date
+          description: When the source last updated the data, or `null` if unknown.
+    Caveats:
+      type: array
+      description: Data-quality caveats and limits on interpretation. Empty when there are none.
+      items:
+        type: string
+
+    NumericResult:
+      type: object
+      description: >-
+        A computed number with everything needed to cite it. `value` is
+        `null` when the value is missing; a missing value is never `0`.
+      required: [value, unit, period, geography, method, source, caveats]
+      properties:
+        value:
+          type: [number, "null"]
+          description: The computed value, or `null` when it is missing. A missing value is never `0`.
+        unit:
+          type: string
+        period:
+          $ref: "#/components/schemas/Period"
+        geography:
+          $ref: "#/components/schemas/Geography"
+        method:
+          $ref: "#/components/schemas/Method"
+        source:
+          $ref: "#/components/schemas/Source"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
+
+    Finding:
+      description: >-
+        A statement of fact computed in Python, with the number it rests on.
+        Gemini's interpretation cites findings by `id`. `value` is `null` when
+        the finding is about missing data; a missing value is never `0`.
+      allOf:
+        - $ref: "#/components/schemas/NumericResult"
+        - type: object
+          required: [id, kind, metric, statement, result_ids]
+          properties:
+            id:
+              type: string
+            kind:
+              type: string
+              enum: [trend, comparison, baseline, anomaly, data_gap]
+            metric:
+              $ref: "#/components/schemas/IndicatorCode"
+            statement:
+              type: string
+              description: The finding in one sentence, generated from the computed values.
+            result_ids:
+              type: array
+              description: Identifiers of the series, comparison, baseline or anomaly results that support the finding.
+              items:
+                type: string
+
+    SeriesPoint:
+      type: object
+      required: [period, value]
+      properties:
+        period:
+          $ref: "#/components/schemas/PeriodLabel"
+        value:
+          type: [number, "null"]
+          description: The value for the period, or `null` when it is missing. A missing value is never `0`.
+    Series:
+      type: object
+      description: >-
+        A time series of one indicator for one country. The values are in
+        `points`; each point's `value` is `null` when missing, never `0`.
+      required: [id, metric, unit, period, geography, method, source, caveats, points]
+      properties:
+        id:
+          type: string
+        metric:
+          $ref: "#/components/schemas/IndicatorCode"
+        unit:
+          type: string
+        period:
+          $ref: "#/components/schemas/Period"
+        geography:
+          $ref: "#/components/schemas/Geography"
+        method:
+          $ref: "#/components/schemas/Method"
+        source:
+          $ref: "#/components/schemas/Source"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeriesPoint"
+
+    ComparisonEntry:
+      description: >-
+        One country's value in a comparison. `value` is `null` when it is
+        missing, never `0`; `rank` is then `null` too.
+      allOf:
+        - $ref: "#/components/schemas/NumericResult"
+        - type: object
+          required: [rank]
+          properties:
+            rank:
+              type: [integer, "null"]
+              minimum: 1
+              description: Position by value, 1 being the highest, or `null` when the value is missing.
+    ComparisonResult:
+      type: object
+      description: >-
+        The same indicator compared across countries. Each entry is a full
+        numeric result with its own value, unit, period, geography, method,
+        source and caveats.
+      required: [id, metric, method, entries]
+      properties:
+        id:
+          type: string
+        metric:
+          $ref: "#/components/schemas/IndicatorCode"
+        method:
+          $ref: "#/components/schemas/Method"
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComparisonEntry"
+
+    BaselineResult:
+      description: >-
+        A value compared with the indicator's historical baseline. `value` is
+        the observed value for `period`. Any number that cannot be computed
+        because data is missing is `null`, never `0`.
+      allOf:
+        - $ref: "#/components/schemas/NumericResult"
+        - type: object
+          required: [id, metric, baseline_value, baseline_period, difference, percent_difference]
+          properties:
+            id:
+              type: string
+            metric:
+              $ref: "#/components/schemas/IndicatorCode"
+            baseline_value:
+              type: [number, "null"]
+              description: The baseline, for example the mean over `baseline_period`, or `null` when it cannot be computed.
+            baseline_period:
+              $ref: "#/components/schemas/Period"
+            difference:
+              type: [number, "null"]
+              description: "`value` minus `baseline_value`, in `unit`, or `null` when either is missing."
+            percent_difference:
+              type: [number, "null"]
+              description: The difference as a percentage of `baseline_value`, or `null` when it cannot be computed.
+
+    AnomalyResult:
+      description: >-
+        The result of an anomaly test on one value. `value` is the tested
+        value. Any number that cannot be computed because data is missing is
+        `null`, never `0`.
+      allOf:
+        - $ref: "#/components/schemas/NumericResult"
+        - type: object
+          required: [id, metric, is_anomaly, score, threshold, expected_value, direction]
+          properties:
+            id:
+              type: string
+            metric:
+              $ref: "#/components/schemas/IndicatorCode"
+            is_anomaly:
+              type: [boolean, "null"]
+              description: Whether `score` crosses `threshold`, or `null` when the test could not run.
+            score:
+              type: [number, "null"]
+              description: The test statistic, for example a z-score, or `null` when it cannot be computed.
+            threshold:
+              type: number
+              description: The value `score` is compared with.
+            expected_value:
+              type: [number, "null"]
+              description: The value the method expected, or `null` when it cannot be computed.
+            direction:
+              type: [string, "null"]
+              enum: [above, below, null]
+              description: Whether the value is above or below `expected_value`, or `null` when not an anomaly or not computed.
+
+    InterpretationStatement:
+      type: object
+      required: [text, label, finding_ids]
+      properties:
+        text:
+          type: string
+        label:
+          type: string
+          description: >-
+            `observation` restates computed findings; `hypothesis` is a
+            possible explanation the evidence supports but does not prove.
+          enum: [observation, hypothesis]
+        finding_ids:
+          type: array
+          description: The findings the statement cites. Every numerical claim must cite at least one.
+          items:
+            type: string
+    Interpretation:
+      type: object
+      description: Gemini's reading of the computed findings. It contains no numbers that are not in the cited findings.
+      required: [summary, statements, caveats, model]
+      properties:
+        summary:
+          type: string
+        statements:
+          type: array
+          items:
+            $ref: "#/components/schemas/InterpretationStatement"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
+        model:
+          type: string
+          description: The model that wrote the interpretation.
+
+    AnalysisParameters:
+      type: object
+      description: Parameters for the analysis. Omitted fields take their defaults.
+      properties:
+        baseline_periods:
+          type: integer
+          minimum: 2
+          default: 10
+          description: Number of periods before the investigated one that form the historical baseline.
+        anomaly_method:
+          type: string
+          enum: [z_score]
+          default: z_score
+        anomaly_threshold:
+          type: number
+          exclusiveMinimum: 0
+          default: 2
+          description: Score at or above which a value is flagged as an anomaly.
+    InvestigationType:
+      type: string
+      enum: [trend, comparison, anomaly]
+    InvestigationRequest:
+      type: object
+      description: >-
+        What to investigate: a natural-language question, a selection of
+        countries, indicators and period, or both.
+      required: [question, investigation_type, countries, indicators, period]
+      properties:
+        question:
+          type: [string, "null"]
+          maxLength: 2000
+          description: The analyst's question, or `null` when the investigation is defined by the selection alone.
+        investigation_type:
+          $ref: "#/components/schemas/InvestigationType"
+        countries:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/CountryCode"
+        indicators:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/IndicatorCode"
+        period:
+          $ref: "#/components/schemas/PeriodRange"
+        parameters:
+          $ref: "#/components/schemas/AnalysisParameters"
+    InvestigationResult:
+      type: object
+      description: The computed results of an investigation and Gemini's interpretation of them.
+      required:
+        - data_mode
+        - request
+        - findings
+        - series
+        - comparisons
+        - baselines
+        - anomalies
+        - interpretation
+        - sources
+        - caveats
+        - generated_at
+      properties:
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        request:
+          $ref: "#/components/schemas/InvestigationRequest"
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/Series"
+        comparisons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComparisonResult"
+        baselines:
+          type: array
+          items:
+            $ref: "#/components/schemas/BaselineResult"
+        anomalies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnomalyResult"
+        interpretation:
+          $ref: "#/components/schemas/Interpretation"
+        sources:
+          type: array
+          description: Every source used by the results.
+          items:
+            $ref: "#/components/schemas/Source"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
+        generated_at:
+          type: string
+          format: date-time
+
+    InvestigationCreate:
+      type: object
+      required: [title, request, result]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        request:
+          $ref: "#/components/schemas/InvestigationRequest"
+        result:
+          $ref: "#/components/schemas/InvestigationResult"
+    InvestigationUpdate:
+      type: object
+      description: Fields to change. At least one is required; fields left out keep their values.
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        request:
+          $ref: "#/components/schemas/InvestigationRequest"
+        result:
+          $ref: "#/components/schemas/InvestigationResult"
+    Investigation:
+      type: object
+      description: A saved investigation. `data_mode` is the mode its result was computed in.
+      required: [id, title, data_mode, request, result, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        request:
+          $ref: "#/components/schemas/InvestigationRequest"
+        result:
+          $ref: "#/components/schemas/InvestigationResult"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    InvestigationSummary:
+      type: object
+      description: A saved investigation without its result, for lists.
+      required: [id, title, data_mode, investigation_type, countries, indicators, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        investigation_type:
+          $ref: "#/components/schemas/InvestigationType"
+        countries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountryCode"
+        indicators:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndicatorCode"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    InvestigationList:
+      type: object
+      description: >-
+        One page of saved investigations. The top-level `data_mode` is the
+        mode the server is running in; each item has the mode it was run in.
+      required: [data_mode, items, limit, next_cursor]
+      properties:
+        data_mode:
+          $ref: "#/components/schemas/DataMode"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvestigationSummary"
+        limit:
+          type: integer
+          description: The page size used.
+        next_cursor:
+          type: [string, "null"]
+          description: Cursor for the next page, or `null` on the last page.
