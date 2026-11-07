@@ -828,14 +828,15 @@ components:
       examples: [inflation_cpi]
     Frequency:
       type: string
-      enum: [annual, quarterly, monthly]
+      enum: [annual, quarterly, monthly, daily]
     PeriodLabel:
       type: string
       description: >-
-        A period: `YYYY` for annual, `YYYY-Qn` for quarterly or `YYYY-MM` for
-        monthly data.
-      pattern: "^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2]))?$"
-      examples: ["2022"]
+        A period: `YYYY` for annual, `YYYY-Qn` for quarterly, `YYYY-MM` for
+        monthly or `YYYY-MM-DD` for daily data. A daily label must be a real
+        calendar date.
+      pattern: "^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
+      examples: ["2022", "2022-Q1", "2022-01", "2022-01-31"]
 
     Country:
       type: object
@@ -946,7 +947,10 @@ components:
 
     Period:
       type: object
-      description: The period a result covers, from `start` to `end` inclusive.
+      description: >-
+        The period a result covers, from `start` to `end` inclusive. `start`
+        must not be after `end`, and both labels must use the format of
+        `frequency`.
       required: [start, end, frequency]
       properties:
         start:
@@ -972,6 +976,7 @@ components:
           $ref: "#/components/schemas/CountryCode"
         country_name:
           type: string
+          minLength: 1
     Method:
       type: object
       description: The calculation that produced a result and the parameters it used.
@@ -979,13 +984,27 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
           description: Identifier of the method, for example `z_score` or `historical_mean`.
         description:
           type: string
+          minLength: 1
         parameters:
           type: object
-          description: Parameter names and the values used.
-          additionalProperties: true
+          description: >-
+            Parameter names and the values used. A value is a string, a
+            number, a boolean or a list of these, so it always serializes to
+            JSON.
+          additionalProperties:
+            $ref: "#/components/schemas/MethodParameterValue"
+    MethodParameterValue:
+      oneOf:
+        - $ref: "#/components/schemas/MethodParameterScalar"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MethodParameterScalar"
+    MethodParameterScalar:
+      type: [string, number, boolean]
     Source:
       type: object
       description: Lineage of the data behind a result.
@@ -993,9 +1012,11 @@ components:
       properties:
         id:
           type: string
+          minLength: 1
           description: Identifier of the curated dataset or model.
         name:
           type: string
+          minLength: 1
         provider:
           type: [string, "null"]
           description: Original publisher, for example `IMF`, or `null` if unknown.
@@ -1012,12 +1033,15 @@ components:
       description: Data-quality caveats and limits on interpretation. Empty when there are none.
       items:
         type: string
+        minLength: 1
 
     NumericResult:
       type: object
       description: >-
         A computed number with everything needed to cite it. `value` is
-        `null` when the value is missing; a missing value is never `0`.
+        `null` when the value is missing; a missing value is never `0`, and
+        `caveats` must then say why it is missing. Numbers are finite: NaN
+        and infinity are not valid values.
       required: [value, unit, period, geography, method, source, caveats]
       properties:
         value:
@@ -1025,6 +1049,7 @@ components:
           description: The computed value, or `null` when it is missing. A missing value is never `0`.
         unit:
           type: string
+          minLength: 1
         period:
           $ref: "#/components/schemas/Period"
         geography:
@@ -1075,7 +1100,9 @@ components:
       type: object
       description: >-
         A time series of one indicator for one country. The values are in
-        `points`; each point's `value` is `null` when missing, never `0`.
+        `points`; each point's `value` is `null` when missing, never `0`,
+        and `caveats` must then say why. Each point's period lies within
+        `period` and uses the format of its `frequency`.
       required: [id, metric, unit, period, geography, method, source, caveats, points]
       properties:
         id:
@@ -1084,6 +1111,7 @@ components:
           $ref: "#/components/schemas/IndicatorCode"
         unit:
           type: string
+          minLength: 1
         period:
           $ref: "#/components/schemas/Period"
         geography:

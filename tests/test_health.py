@@ -86,8 +86,10 @@ def test_invalid_setting_stops_startup():
 def test_env_example_lists_every_setting():
     example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
-    for name in Settings.model_fields:
-        assert f"COPILOT_{name.upper()}=" in example
+    for name, field in Settings.model_fields.items():
+        # A field with an alias, such as DATABASE_URL, is read without the prefix.
+        variable = field.validation_alias or f"COPILOT_{name.upper()}"
+        assert f"{variable}=" in example, variable
 
 
 def test_env_file_is_ignored_and_example_is_not():
