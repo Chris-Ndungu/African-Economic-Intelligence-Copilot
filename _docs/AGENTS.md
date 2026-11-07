@@ -34,6 +34,7 @@ Repository layout
 - `CLAUDE.md` - loads this file into Claude Code sessions
 - `.python-version` - Python version used by `uv`
 - `.gitignore` - files Git ignores
+- `.github/` - GitHub issue and pull request templates
 
 Conventions
 

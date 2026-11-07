@@ -66,7 +66,6 @@ def test_commands_and_rules_keep_their_original_lines():
 
 def test_placeholders_name_the_issue_that_fills_them():
     expected = {
-        "agent-team.md": "#3",
         "architecture.md": "#54",
         "data-contract.md": "#5 and #6",
         "api.md": "#10",
@@ -83,7 +82,7 @@ def test_layout_matches_repository_root():
         for name in re.findall(r"^- `([^`]+)`", section("Repository layout"), re.M)
     }
     present = {p.name for p in ROOT.iterdir() if not p.name.startswith(".")}
-    present |= {p.name for p in ROOT.iterdir() if p.name in {".gitignore", ".python-version"}}
+    present |= {p.name for p in ROOT.iterdir() if p.name in {".gitignore", ".python-version", ".github"}}
     assert listed - present == set(), "layout lists paths that do not exist"
     assert present - listed == set(), "layout is missing top-level paths"
 

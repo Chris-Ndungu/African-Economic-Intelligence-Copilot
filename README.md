@@ -21,3 +21,6 @@ uv run pytest
 - [Product plan](_docs/plan.md)
 - [Backlog](_docs/task.md)
 - [Agent instructions](_docs/AGENTS.md)
+- [Process](_docs/process.md)
+- [Agent team](_docs/agent-team.md)
+- Project board: TODO - link added once the board is created

@@ -1,3 +1,5 @@
+Mirrored in `.github/ISSUE_TEMPLATE/task.md`, the template GitHub offers under "New issue". A change to the sections below is made in both places.
+
 ## Goal
 
 One or two sentences on what should be true when this is done.
