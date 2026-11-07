@@ -1,8 +1,11 @@
 """Tests for the core result models in copilot_core.models (#11)."""
 
 import ast
+import copy
+import hashlib
 import json
 import math
+import pickle
 from datetime import date
 from pathlib import Path
 
@@ -17,6 +20,7 @@ from copilot_core.models import (
     Finding,
     Geography,
     Method,
+    Parameters,
     Period,
     SeriesPoint,
     SeriesResult,
@@ -668,6 +672,250 @@ def test_unknown_fields_are_rejected(model):
     with pytest.raises(ValidationError) as exc:
         model.model_validate(RESULT_BUILDERS[model](colour="red"))
     assert error_locs(exc.value) == ["colour"]
+
+
+# --- Deep copy and pickling (#69) -------------------------------------------
+
+COPY_PARAMETERS = {"a": [1, "x", True], "b": 1.5, "c": 3, "d": "yoy", "e": False}
+FROZEN_PARAMETERS = {"a": (1, "x", True), "b": 1.5, "c": 3, "d": "yoy", "e": False}
+
+
+def with_parameters(builder, parameters):
+    """The builder's data, with ``parameters`` in every Method it contains."""
+    params = method(parameters=parameters)
+    if builder is method:
+        return params
+    if builder is comparison:
+        return comparison(
+            method=params,
+            entries=[
+                comparison_entry(
+                    value=18.8, rank=1, method=params, geography=geography("NGA", "Nigeria")
+                ),
+                comparison_entry(value=7.7, rank=2, method=params),
+            ],
+        )
+    if builder in (finding, series, comparison_entry, baseline, anomaly):
+        return builder(method=params)
+    return builder()
+
+
+# The six result models from #11, and Method on its own.
+COPY_MODELS = {
+    SourceRef: source,
+    Finding: finding,
+    SeriesResult: series,
+    ComparisonResult: comparison,
+    BaselineResult: baseline,
+    AnomalyResult: anomaly,
+    Method: method,
+}
+
+COPY_CASES = [
+    pytest.param(model, params, id=f"{model.__name__}-{label}")
+    for model in COPY_MODELS
+    for label, params in (("params", COPY_PARAMETERS), ("empty", {}))
+]
+
+
+def build_for_copy(model, parameters):
+    return model.model_validate(with_parameters(COPY_MODELS[model], parameters))
+
+
+def methods_of(m):
+    """Every Method inside a model, including those of comparison entries."""
+    if isinstance(m, Method):
+        return [m]
+    found = [m.method] if hasattr(m, "method") else []
+    found += [entry.method for entry in getattr(m, "entries", ())]
+    return found
+
+
+def pickle_round_trip(protocol):
+    return lambda m: pickle.loads(pickle.dumps(m, protocol=protocol))
+
+
+COPIERS = {
+    "deepcopy": copy.deepcopy,
+    "model_copy-deep": lambda m: m.model_copy(deep=True),
+    **{
+        f"pickle-{protocol}": pickle_round_trip(protocol)
+        for protocol in range(2, pickle.HIGHEST_PROTOCOL + 1)
+    },
+}
+
+
+def _ior(p):
+    p |= {"b": 99.0}
+
+
+PARAMETER_CHANGES = {
+    "set": lambda p: p.__setitem__("b", 99.0),
+    "delete": lambda p: p.__delitem__("b"),
+    "update": lambda p: p.update({"b": 99.0}),
+    "pop": lambda p: p.pop("b"),
+    "clear": lambda p: p.clear(),
+    "setdefault": lambda p: p.setdefault("z", 1),
+    "ior": _ior,
+    "list-append": lambda p: p["a"].append("y"),
+    "replace-store": lambda p: setattr(p, "_items", {}),
+    "delete-store": lambda p: delattr(p, "_items"),
+    "store-set": lambda p: p._items.__setitem__("b", 99.0),
+    "store-clear": lambda p: p._items.clear(),
+    "new-attribute": lambda p: setattr(p, "extra", 1),
+}
+
+
+def assert_parameters_immutable(p):
+    before = dict(p)
+    for name, change in PARAMETER_CHANGES.items():
+        if name == "list-append" and "a" not in p:
+            continue
+        with pytest.raises((TypeError, AttributeError, KeyError)):
+            change(p)
+    assert dict(p) == before
+    if "a" in p:
+        assert isinstance(p["a"], tuple)
+
+
+def assert_model_immutable(m):
+    before = m.model_dump_json()
+    for inner in methods_of(m):
+        with pytest.raises(ValidationError, match="frozen"):
+            inner.parameters = {}
+        assert_parameters_immutable(inner.parameters)
+    assert m.model_dump_json() == before
+
+
+@pytest.mark.parametrize("copier", COPIERS)
+@pytest.mark.parametrize("model, parameters", COPY_CASES)
+def test_models_deep_copy_and_pickle(model, parameters, copier):
+    m = build_for_copy(model, parameters)
+    original_json = m.model_dump_json()
+    result = COPIERS[copier](m)
+
+    assert type(result) is model
+    assert result == m
+    assert hash(result) == hash(m)
+    assert result.model_dump_json() == original_json
+    for inner in methods_of(result):
+        assert isinstance(inner.parameters, Parameters)
+        assert inner.parameters == {k: FROZEN_PARAMETERS[k] for k in parameters}
+        if "a" in parameters:
+            assert inner.parameters["a"] == (1, "x", True)
+
+    assert_model_immutable(result)
+    assert_model_immutable(m)
+    assert m.model_dump_json() == original_json
+
+
+@pytest.mark.parametrize("model, parameters", COPY_CASES)
+def test_shallow_copy_and_model_copy_update_still_work(model, parameters):
+    m = build_for_copy(model, parameters)
+    shallow = copy.copy(m)
+    assert shallow == m and hash(shallow) == hash(m)
+    field = next(iter(model.model_fields))
+    updated = m.model_copy(update={field: getattr(m, field)})
+    assert updated == m and hash(updated) == hash(m)
+    assert_model_immutable(shallow)
+    assert_model_immutable(updated)
+
+
+PARAMETER_COPIERS = {k: v for k, v in COPIERS.items() if k != "model_copy-deep"}
+
+
+@pytest.mark.parametrize("copier", PARAMETER_COPIERS)
+@pytest.mark.parametrize("parameters", [COPY_PARAMETERS, {}], ids=["params", "empty"])
+def test_parameters_alone_deep_copy_and_pickle(parameters, copier):
+    p = Method.model_validate(method(parameters=parameters)).parameters
+    result = PARAMETER_COPIERS[copier](p)
+    assert type(result) is Parameters
+    assert result == p and hash(result) == hash(p)
+    assert dict(result) == {k: FROZEN_PARAMETERS[k] for k in parameters}
+    assert_parameters_immutable(result)
+    assert_parameters_immutable(p)
+
+
+def test_changing_a_copy_leaves_the_original_unchanged():
+    m = build_for_copy(Finding, COPY_PARAMETERS)
+    before = m.model_dump_json()
+    for copier in COPIERS.values():
+        result = copier(m)
+        for change in PARAMETER_CHANGES.values():
+            with pytest.raises((TypeError, AttributeError, KeyError)):
+                change(result.method.parameters)
+        with pytest.raises(ValidationError, match="frozen"):
+            result.method.parameters = {}
+        assert result.model_dump_json() == before
+    assert m.model_dump_json() == before
+
+
+class _CraftedParameters:
+    """Pickles as a Parameters made with ``object.__new__``, skipping
+    ``__init__``, with a plain mutable dict as its store."""
+
+    def __reduce__(self):
+        return (object.__new__, (Parameters,), (None, {"_items": {"b": 1.5}}))
+
+
+def test_unpickling_cannot_give_mutable_parameters():
+    p = Method.model_validate(method(parameters=COPY_PARAMETERS)).parameters
+    # A real Parameters pickles as a call to Parameters(dict), with no state,
+    # so unpickling always goes through __init__ and freezes the store.
+    reduced = p.__reduce_ex__(pickle.HIGHEST_PROTOCOL)
+    assert reduced[0] is Parameters and len(reduced) == 2
+    # A crafted pickle that tries to set the store directly is refused.
+    with pytest.raises(AttributeError):
+        pickle.loads(pickle.dumps(_CraftedParameters()))
+    # Unpickling a list value gives a tuple, not a list.
+    data = pickle.dumps(Parameters({"a": [1, 2]}))
+    assert pickle.loads(data)["a"] == (1, 2)
+    assert_parameters_immutable(pickle.loads(pickle.dumps(p)))
+
+
+def test_hashing_still_holds_for_copies():
+    a = build_for_copy(Finding, COPY_PARAMETERS)
+    b = build_for_copy(Finding, {**COPY_PARAMETERS, "c": 4})
+    copies = [copier(a) for copier in COPIERS.values()]
+    assert a != b
+    assert len({a, b, *copies}) == 2
+    assert all(c != b and hash(c) == hash(a) for c in copies)
+
+
+def test_parameters_reject_non_string_keys():
+    with pytest.raises(ValidationError):
+        Method.model_validate(method(parameters={1: "x"}))
+
+
+def test_parameters_from_a_copy_can_be_reused_in_another_method():
+    m = pickle.loads(pickle.dumps(build_for_copy(Finding, COPY_PARAMETERS)))
+    reused = Method(name="z_score", description="Reused.", parameters=m.method.parameters)
+    assert reused.parameters == FROZEN_PARAMETERS
+    with pytest.raises(ValidationError):
+        Method.model_validate(method(parameters={"p": (1, 2)}))
+
+
+def contract_digest():
+    """A digest of model_dump(), model_dump_json() and model_json_schema() in
+    validation and serialization mode, for every model."""
+    parts = []
+    for model in ALL_MODELS:
+        m = model.model_validate(with_parameters(ALL_MODELS[model], COPY_PARAMETERS))
+        parts.append(m.model_dump_json())
+        parts.append(repr(m.model_dump()))
+        for mode in ("validation", "serialization"):
+            parts.append(json.dumps(model.model_json_schema(mode=mode), sort_keys=True))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
+# contract_digest() computed with copilot_core/models.py at b086c7b.
+CONTRACT_DIGEST_AT_B086C7B = (
+    "96f449bd4747e1fc89581ab06681b8e132106f85c53ea8c19fc24e9a40ff3f2e"
+)
+
+
+def test_dumps_and_schemas_are_unchanged_since_b086c7b():
+    assert contract_digest() == CONTRACT_DIGEST_AT_B086C7B
 
 
 # --- Match the contract ------------------------------------------------------
