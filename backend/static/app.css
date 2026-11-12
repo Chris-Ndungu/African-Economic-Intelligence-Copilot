@@ -183,3 +183,28 @@ body {
 .data-table th[aria-sort="descending"]::after { content: " \25BC"; }
 .data-table th:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
 .data-table td.missing { color: var(--color-muted); }
+
+/* Findings and evidence */
+.results-header h2 { margin: 0 0 0.5rem; overflow-wrap: anywhere; }
+.run-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.125rem 1rem; margin: 0 0 0.75rem; }
+.run-facts dd { margin: 0; overflow-wrap: anywhere; }
+.results-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space); }
+@media (min-width: 992px) { .results-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; } }
+.finding-card { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.75rem; margin: 0 0 var(--space); overflow-wrap: anywhere; }
+.finding-card.is-hypothesis { border-style: dashed; }
+.finding-card.is-unverified { border-width: 2px; border-color: var(--color-text); }
+.finding-card h4 { margin: 0.5rem 0 0.25rem; font-size: 0.875rem; }
+.labels { margin: 0 0 0.25rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.label { border: 1px solid var(--color-text); border-radius: var(--radius); padding: 0 0.5rem; font-size: 0.8125rem; font-weight: 600; }
+.label-hypothesis { background: var(--color-surface); }
+.label-unverified { background: var(--color-text); color: var(--color-background); }
+.kind { color: var(--color-muted); font-size: 0.8125rem; text-transform: capitalize; }
+.statement { margin: 0.25rem 0; font-weight: 600; }
+.association { font-style: italic; margin: 0.5rem 0; }
+.sources summary { cursor: pointer; }
+.missing-notes, .caveats-block { color: var(--color-muted); font-size: 0.875rem; }
+.chart-block:target { outline: 3px solid var(--color-accent); outline-offset: 4px; }
+.no-findings { border: 1px dashed var(--color-border); border-radius: var(--radius); padding: 0.75rem; }
+.message.error { border: 1px solid var(--color-text); border-radius: var(--radius); padding: 0.5rem; }
+.data-mode-demo { font-weight: 600; }
+.evidence { min-width: 0; }

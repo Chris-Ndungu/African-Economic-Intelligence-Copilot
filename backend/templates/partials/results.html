@@ -1,0 +1,59 @@
+{% set view = results_view(investigation) %}
+<section class="results" id="results-{{ view.investigation_id }}">
+  <header class="results-header">
+    <h2>{{ view.heading }}</h2>
+    <dl class="run-facts">
+      <dt>Countries</dt><dd>{% if view.countries %}{{ view.countries|join(", ") }}{% else %}Not recorded{% endif %}</dd>
+      <dt>Indicator</dt><dd>{% if view.indicators %}{{ view.indicators|join(", ") }}{% else %}Not recorded{% endif %}</dd>
+      <dt>Period</dt><dd>{% if view.period %}{{ view.period }}{% else %}Not recorded{% endif %}</dd>
+      <dt>Data mode</dt><dd class="data-mode data-mode-{{ view.data_mode }}">{{ view.data_mode_label }}</dd>
+      <dt>Run at</dt><dd><time datetime="{{ view.run_iso }}">{{ view.run_text }}</time></dd>
+    </dl>
+    {% if view.selection %}
+    <form class="continue" action="/" method="post" hx-post="/partials/selection" hx-target="#selection-panel" hx-swap="outerHTML">
+      {% for code in view.selection.countries %}<input type="hidden" name="country" value="{{ code }}">{% endfor %}
+      <input type="hidden" name="indicator" value="{{ view.selection.indicator }}">
+      <input type="hidden" name="start" value="{{ view.selection.start }}">
+      <input type="hidden" name="end" value="{{ view.selection.end }}">
+      <button class="button" type="submit">Start from these selections</button>
+    </form>
+    {% endif %}
+  </header>
+{% if view.error %}
+  <p class="message error" role="alert">{{ view.error }}</p>
+{% elif view.unfinished %}
+  <p class="message" role="status">This investigation has not finished ({{ view.status }}).</p>
+{% else %}
+  {% if view.summary %}<p class="summary">{{ view.summary }}</p>{% endif %}
+  {% if not view.has_findings %}
+  <div class="no-findings"><h3>No findings</h3>
+    {% if view.unsupported_reason %}<p>{{ view.unsupported_reason }}</p>{% endif %}
+    {% for c in view.caveats %}<p class="caveat">{{ c }}</p>{% endfor %}
+    {% for g in view.data_gaps %}<p class="caveat">{{ g }}</p>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="results-grid">
+    <div class="findings">
+      {% if view.facts %}<h3>Observed facts</h3>
+      {% for card in view.facts %}{% include "partials/finding_card.html" %}{% endfor %}{% endif %}
+      {% if view.unverified %}<h3>Unverified claims</h3>
+      {% for card in view.unverified %}{% include "partials/finding_card.html" %}{% endfor %}{% endif %}
+      {% if view.hypotheses %}<h3>Possible explanations</h3>
+      {% for card in view.hypotheses %}{% include "partials/finding_card.html" %}{% endfor %}{% endif %}
+      {% if view.has_findings and (view.caveats or view.data_gaps) %}
+      <div class="caveats-block"><h3>Caveats</h3>
+        <ul>{% for c in view.caveats %}<li>{{ c }}</li>{% endfor %}{% for g in view.data_gaps %}<li>{{ g }}</li>{% endfor %}</ul></div>
+      {% endif %}
+    </div>
+    <div class="evidence">
+      {% for block in view.charts %}
+      {% set view = block.view %}
+      <section class="chart-block" id="chart-{{ block.id }}">
+        {% include "partials/chart.html" %}
+        <div class="data-table-wrap">{% include "partials/table.html" %}</div>
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+</section>

@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from backend.dependencies import get_data_service, get_repository
 from copilot_core.data import DataError, DataService, DataUnavailableError
+from copilot_core.findings_view import build_results_view
 from copilot_core.formatting import format_number
 from copilot_core.investigation import run_trend_investigation
 from copilot_core.models import SeriesResult
@@ -49,6 +50,7 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["htmx_file"] = HTMX_FILE
 templates.env.globals["plotly_file"] = PLOTLY_FILE
 templates.env.filters["number"] = format_number
+templates.env.globals["results_view"] = build_results_view
 
 router = APIRouter(include_in_schema=False)
 
