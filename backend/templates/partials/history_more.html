@@ -1,0 +1,8 @@
+<div id="history-more"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% if history.error %}
+  <p class="message" role="alert">{{ history.error }}</p>
+  <button class="button" type="button" hx-get="/partials/history?cursor={{ cursor|urlencode }}" hx-target="#history-list" hx-swap="beforeend">Retry</button>
+{% elif history.next_cursor %}
+  <button class="button" type="button" hx-get="/partials/history?cursor={{ history.next_cursor|urlencode }}" hx-target="#history-list" hx-swap="beforeend">Load more</button>
+{% endif %}
+</div>

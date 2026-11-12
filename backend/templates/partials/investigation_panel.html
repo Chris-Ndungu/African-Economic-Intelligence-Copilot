@@ -1,0 +1,15 @@
+{% if state == "found" %}
+<div id="results" aria-live="polite">{% include "partials/results.html" %}</div>
+{% elif state == "unavailable" %}
+<div id="results" role="alert">
+  <h2>Investigation unavailable</h2>
+  <p class="message">The investigation could not be loaded because the database is unavailable.</p>
+  <p><a class="button" href="/investigations/{{ investigation_id }}">Retry</a></p>
+</div>
+{% else %}
+<div id="results">
+  <h2>Not found</h2>
+  <p class="message">No saved investigation matches this address.</p>
+  <p><a class="button" href="/">Back to the workspace</a></p>
+</div>
+{% endif %}

@@ -208,3 +208,15 @@ body {
 .message.error { border: 1px solid var(--color-text); border-radius: var(--radius); padding: 0.5rem; }
 .data-mode-demo { font-weight: 600; }
 .evidence { min-width: 0; }
+
+/* History sidebar */
+.history { margin-top: var(--space); }
+.history h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-item a { display: block; padding: 0.375rem 0.5rem; border-radius: var(--radius); color: inherit; text-decoration: none; border-left: 3px solid transparent; overflow-wrap: anywhere; }
+.history-item a:hover, .history-item a:focus-visible { background: var(--color-background); }
+.history-item a[aria-current="page"] { background: var(--color-background); border-left-color: var(--color-accent); font-weight: 600; }
+.history-title { display: block; }
+.history-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; color: var(--color-muted); font-size: 0.8125rem; }
+#history-more { margin-top: 0.5rem; }
+#history-more:empty { display: none; }

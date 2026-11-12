@@ -9,11 +9,14 @@
     <p class="message">The selection could not be updated. Your previous selection is unchanged.</p>
     <button class="button" type="button" id="selection-retry">Retry</button>
   </div>
+  {% include "partials/history.html" %}
 </aside>
-<main class="workspace" aria-label="Workspace">
+<main class="workspace" id="workspace" aria-label="Workspace">
+{% block main %}
   <p class="demo-label">Demo mode: sample data snapshot, not live data.</p>
   <div id="results" aria-live="polite">
     <p class="placeholder">Ask a question or pick a selection to start an investigation.</p>
   </div>
+{% endblock %}
 </main>
 {% endblock %}

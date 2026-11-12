@@ -10,6 +10,8 @@ over HTTP.
 - Static files: served at `/static/...` from `backend/static/`
 """
 
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import parse_qs
@@ -23,9 +25,14 @@ from backend.dependencies import get_data_service, get_repository
 from copilot_core.data import DataError, DataService, DataUnavailableError
 from copilot_core.findings_view import build_results_view
 from copilot_core.formatting import format_number
+from copilot_core.history import HistoryEntry, load_history
 from copilot_core.investigation import run_trend_investigation
 from copilot_core.models import SeriesResult
-from copilot_core.repository import RepositoryError
+from copilot_core.repository import (
+    DatabaseUnavailableError,
+    InvestigationNotFoundError,
+    RepositoryError,
+)
 from copilot_core.schemas import InvestigationCreate
 from copilot_core.selection import (
     MAX_COUNTRIES,
@@ -102,16 +109,101 @@ def _panel(request: Request, submitted: SubmittedSelection) -> SelectionPanel | 
 
 
 def _render_panel(
-    request: Request, name: str, submitted: SubmittedSelection, extra: dict[str, object]
+    request: Request,
+    name: str,
+    submitted: SubmittedSelection,
+    extra: dict[str, object],
+    status_code: int = 200,
 ) -> HTMLResponse:
     context = {"panel": _panel(request, submitted), "max_countries": MAX_COUNTRIES, **extra}
-    return templates.TemplateResponse(request, name, context)
+    response = templates.TemplateResponse(request, name, context, status_code=status_code)
+    response.headers["Vary"] = "HX-Request"
+    return response
+
+
+@dataclass
+class HistoryState:
+    """What the history partials print: a page of entries or an error."""
+
+    entries: list[HistoryEntry] = field(default_factory=list)
+    next_cursor: str | None = None
+    error: str | None = None
+
+
+def _history(request: Request, cursor: str | None = None) -> HistoryState:
+    try:
+        page = load_history(get_repository(request), cursor=cursor)
+    except DatabaseUnavailableError:
+        return HistoryState(error="The history could not be loaded: the database is unavailable.")
+    except RepositoryError:
+        return HistoryState(error="The history could not be loaded.")
+    except ValueError:
+        return HistoryState(error="The next page could not be loaded.")
+    return HistoryState(page.entries, page.next_cursor)
 
 
 @router.get("/", response_class=HTMLResponse)
 def workspace(request: Request) -> HTMLResponse:
-    """The workspace: the selection panel and the results area."""
-    return _render_panel(request, "pages/workspace.html", SubmittedSelection(), {})
+    """The workspace: the selection panel, the history and the results area."""
+    return _render_panel(
+        request, "pages/workspace.html", SubmittedSelection(), {"history": _history(request)}
+    )
+
+
+@router.get("/partials/history", response_class=HTMLResponse)
+def history_partial(
+    request: Request,
+    cursor: Annotated[str | None, Query()] = None,
+    active: Annotated[str | None, Query()] = None,
+) -> HTMLResponse:
+    """The history list, or with ``cursor`` the next page of its items.
+
+    Errors answer ``200`` so HTMX swaps the message and its Retry button in.
+    """
+    history = _history(request, cursor)
+    context: dict[str, object] = {"history": history, "active": active, "cursor": cursor or ""}
+    if cursor is None:
+        return templates.TemplateResponse(request, "partials/history.html", context)
+    context["oob"] = True
+    return templates.TemplateResponse(request, "partials/history_page.html", context)
+
+
+def _is_fragment_request(request: Request) -> bool:
+    """HTMX asks for the main panel only; a history restore needs the whole page."""
+    headers = request.headers
+    return (
+        headers.get("hx-request") == "true" and headers.get("hx-history-restore-request") != "true"
+    )
+
+
+@router.get("/investigations/{investigation_id}", response_class=HTMLResponse)
+def investigation_page(request: Request, investigation_id: str) -> HTMLResponse:
+    """A saved investigation: the full page, or the main panel for an HTMX request."""
+    state, status_code, investigation = "found", 200, None
+    try:
+        parsed = uuid.UUID(investigation_id)
+        investigation = get_repository(request).get(parsed)
+    except (ValueError, InvestigationNotFoundError):
+        state, status_code = "not_found", 404
+    except RepositoryError:
+        state, status_code = "unavailable", 503
+    context: dict[str, object] = {
+        "state": state,
+        "investigation": investigation,
+        "investigation_id": investigation_id,
+        "title": investigation.title if investigation else "Not found",
+        "active": str(investigation.id) if investigation else "",
+    }
+    if _is_fragment_request(request):
+        response = templates.TemplateResponse(
+            request, "partials/investigation_panel.html", context, status_code=status_code
+        )
+        response.headers["Vary"] = "HX-Request"
+        return response
+    context["history"] = _history(request)
+    return _render_panel(
+        request, "pages/investigation.html", SubmittedSelection(), context, status_code
+    )
 
 
 @router.post("/partials/selection", response_class=HTMLResponse)
