@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from copilot_core.data import DEFAULT_DATA_DIR
@@ -79,15 +79,13 @@ class Settings(BaseSettings):
     environment: Literal["local", "test", "prod"] = "local"
     """Where the app runs (`COPILOT_ENVIRONMENT`); `prod` refuses the stub client."""
 
-    llm_client: Literal["gemini", "stub"] = Field(
-        default="gemini", validation_alias=AliasChoices("LLM_CLIENT", "COPILOT_LLM_CLIENT")
-    )
+    llm_client: Literal["gemini", "stub"] = Field(default="gemini", validation_alias="LLM_CLIENT")
     """`gemini` calls the real API; `stub` replays recordings and is for end-to-end tests."""
 
     stub_scenario: str = Field(
         default="run_success",
         pattern=r"^[A-Za-z0-9_]+$",
-        validation_alias=AliasChoices("LLM_STUB_SCENARIO", "COPILOT_STUB_SCENARIO"),
+        validation_alias="LLM_STUB_SCENARIO",
     )
     """Recording in `tests/fixtures/llm/` the stub replays when a request names none."""
 
