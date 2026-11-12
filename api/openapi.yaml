@@ -854,6 +854,7 @@ components:
               result_ids: [r1]
               numbers: []
               verification: verified
+              reasons: []
               checks:
                 - text: "2022"
                   value: 2022
@@ -878,6 +879,7 @@ components:
               result_ids: [r1]
               numbers: []
               verification: verified
+              reasons: []
               checks: []
           caveats:
             - Explanations are limited to the indicators in the data source.
@@ -1597,7 +1599,7 @@ components:
     InterpretationFinding:
       type: object
       description: One claim of the interpretation and the tool results it rests on.
-      required: [statement, label, result_ids, numbers, verification, checks]
+      required: [statement, label, result_ids, numbers, verification, checks, reasons]
       properties:
         statement:
           type: string
@@ -1626,6 +1628,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NumberCheck"
+        reasons:
+          type: array
+          description: >-
+            Why the finding is unverified, for example `unknown result r9`
+            or `2.5 (not in any tool result)`; empty when it is verified.
+          items:
+            type: string
     Interpretation:
       type: object
       description: >-
