@@ -7,6 +7,7 @@ service answers ``503`` instead. Tests set ``app.state.llm`` to a
 fails, so no test can reach the real API.
 """
 
+import re
 import threading
 
 from fastapi import Request
@@ -15,7 +16,7 @@ from sqlalchemy import Engine
 from backend.settings import Settings
 from copilot_core.data import DataService, DuckDBDataService
 from copilot_core.db import create_db_engine
-from copilot_core.llm import GeminiClient, LLMClient
+from copilot_core.llm import GeminiClient, LLMClient, StubLLMClient
 from copilot_core.meta import get_meta
 from copilot_core.repository import DatabaseUnavailableError, InvestigationRepository
 from copilot_core.runs import InvestigationService, RunSettings
@@ -56,8 +57,20 @@ def get_repository(request: Request) -> InvestigationRepository:
 
 
 def get_llm(request: Request) -> LLMClient:
-    """The app's language model client; Gemini unless a test set a stub."""
+    """The app's language model client.
+
+    A client set on ``app.state.llm`` wins. With ``LLM_CLIENT=stub`` each call
+    returns a new stub for the scenario in the ``X-Stub-Scenario`` header, or
+    the configured default, so one request cannot affect another. With any
+    other client the header is ignored.
+    """
     state = request.app.state
+    settings = get_settings(request)
+    if getattr(state, "llm", None) is None and settings.llm_client == "stub":
+        scenario = request.headers.get("x-stub-scenario", "")
+        if not re.fullmatch(r"[A-Za-z0-9_]+", scenario):  # never build a file path from it
+            scenario = settings.stub_scenario
+        return StubLLMClient(scenario)
     with _lock:
         if getattr(state, "llm", None) is None:
             state.llm = GeminiClient(get_settings(request).gemini_config())
@@ -68,8 +81,11 @@ def get_llm(request: Request) -> LLMClient:
 def gemini_configured(request: Request) -> bool:
     """Whether runs can reach Gemini: a key is set, or a client was provided."""
     state = request.app.state
+    settings = get_settings(request)
     return (
-        get_settings(request).gemini_api_key is not None or getattr(state, "llm", None) is not None
+        settings.gemini_api_key is not None
+        or settings.llm_client == "stub"
+        or getattr(state, "llm", None) is not None
     )
 
 

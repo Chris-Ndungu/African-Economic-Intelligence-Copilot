@@ -1,0 +1,29 @@
+# End-to-end test stack: an override of docker-compose.yml with the stubbed
+# Gemini client, the demo data and a fresh database volume.
+#
+#   docker compose -p copilot-e2e -f docker-compose.yml -f docker-compose.e2e.yml up --wait
+#   docker compose -p copilot-e2e -f docker-compose.yml -f docker-compose.e2e.yml down -v
+#
+# The tests in tests/e2e/ do this for you (see _docs/AGENTS.md). The stack
+# answers at http://localhost:8010, apart from `docker compose up`'s port 8000
+# and Postgres port 5432, so both can run at the same time.
+services:
+  db:
+    # No host port: only the app talks to this database.
+    ports: !reset []
+    volumes:
+      - postgres-e2e-data:/var/lib/postgresql/data
+
+  api:
+    environment:
+      LLM_CLIENT: stub
+      LLM_STUB_SCENARIO: run_success
+      COPILOT_ENVIRONMENT: test
+    ports: !override
+      - "8010:8000"
+    volumes:
+      # The recorded Gemini answers the stub replays.
+      - ./tests/fixtures/llm:/app/tests/fixtures/llm:ro
+
+volumes:
+  postgres-e2e-data:

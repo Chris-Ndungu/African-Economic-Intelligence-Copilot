@@ -37,7 +37,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Show why tests were skipped, so skipped database tests are never mistaken
 # for passed ones.
-addopts = "-rs"
+addopts = "-rs --tracing=retain-on-failure --screenshot=only-on-failure --output=test-results"
+markers = [
+    "e2e: end-to-end browser tests (Playwright); they need Docker or E2E_BASE_URL",
+]
 
 [tool.ruff]
 line-length = 100

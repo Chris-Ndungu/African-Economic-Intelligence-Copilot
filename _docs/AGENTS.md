@@ -25,6 +25,10 @@ Commands
 - `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
+- `uv run playwright install chromium` - install the browser the end-to-end tests drive; once per machine
+- `uv run pytest -m e2e` - only the end-to-end tests in `tests/e2e/`: they start the stack from `docker-compose.yml` and `docker-compose.e2e.yml` (stubbed Gemini, demo data, a fresh database) at `http://localhost:8010`, or use the app at `E2E_BASE_URL` if it is set. Without Docker and without `E2E_BASE_URL` they are skipped with a message. Traces and screenshots of failures are written to `test-results/`
+- `uv run pytest -m "not e2e"` - everything except the end-to-end tests; needs no Docker or browser
+- `LLM_CLIENT=stub` - the app replays recorded Gemini answers from `tests/fixtures/llm/` (default scenario `LLM_STUB_SCENARIO`, or per request the `X-Stub-Scenario` header); `gemini` is the default and ignores the header; the app refuses to start with `stub` when `COPILOT_ENVIRONMENT=prod`
 - `RUN_LIVE_GEMINI=1 uv run pytest tests/test_live_gemini.py` - the live Gemini smoke test and evaluation cases; they need `COPILOT_GEMINI_API_KEY` and are skipped otherwise. Every other test uses `StubLLMClient` with the recordings in `tests/fixtures/llm/`
 - `uv run pytest tests/test_report.py` - the PDF report tests; the ones that make a PDF are skipped, with the install steps in the message, when WeasyPrint's system libraries are missing, and the chart tests are skipped when Kaleido has no Chrome (see "PDF reports")
 
@@ -49,6 +53,7 @@ Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
 - `docker-compose.yml` - the local stack: Postgres and the app, built from `backend/Dockerfile`
+- `docker-compose.e2e.yml` - override of it for the end-to-end tests: stubbed Gemini and a fresh database volume
 - `alembic.ini` - Alembic configuration; the connection string comes from `DATABASE_URL`, never this file
 - `api/` - the OpenAPI contract, `api/openapi.yaml`
 - `backend/` - FastAPI application: thin routes, settings, no business logic; `templates/` holds the Jinja pages and HTMX partials, and `static/` the CSS, small scripts and vendored files

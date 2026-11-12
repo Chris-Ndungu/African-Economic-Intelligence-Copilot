@@ -137,6 +137,9 @@ def test_each_item_loads_into_the_main_panel_and_pushes_the_url():
     link = page.find("a", href=f"/investigations/{item.id}")
     assert link.attrs["hx-get"] == f"/investigations/{item.id}"
     assert link.attrs["hx-target"] == "#workspace" and link.attrs["hx-push-url"] == "true"
+    # The history section swaps itself with outerHTML, which its links inherit unless they
+    # say otherwise; without this the click would replace the main panel itself.
+    assert link.attrs["hx-swap"] == "innerHTML"
 
 
 def test_the_empty_state_says_no_investigations_yet_with_a_hint():
