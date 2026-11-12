@@ -1,0 +1,9 @@
+{
+  "description": "Gemini rejects the request with 400.",
+  "responses": [
+    {
+      "error": "LLMRequestError",
+      "message": "Gemini returned 400: bad request"
+    }
+  ]
+}

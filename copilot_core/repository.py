@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
@@ -28,16 +28,21 @@ from copilot_core.models import Finding, SourceRef
 from copilot_core.schemas import (
     Investigation,
     InvestigationCreate,
+    InvestigationError,
     InvestigationRequest,
     InvestigationResult,
+    InvestigationRun,
     InvestigationSummary,
     InvestigationUpdate,
+    LLMUsage,
+    Selection,
 )
 
 __all__ = [
     "DEFAULT_PAGE_SIZE",
     "MAX_PAGE_SIZE",
     "ChartConfig",
+    "Claim",
     "DatabaseUnavailableError",
     "InvalidCursorError",
     "InvalidStatusTransitionError",
@@ -119,6 +124,21 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise InvalidCursorError("cursor is not a cursor from a previous page") from exc
 
 
+def _with_new_fields(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Results saved before runs existed lack ``tool_results`` and ``charts``."""
+    if result is None:
+        return None
+    return {"tool_results": [], "charts": [], **result}
+
+
+@dataclass(frozen=True)
+class Claim:
+    """The outcome of :meth:`InvestigationRepository.claim`."""
+
+    claimed: bool
+    investigation: Investigation
+
+
 def _chart_config(result: InvestigationResult) -> dict[str, Any] | None:
     if not result.series:
         return None
@@ -178,13 +198,27 @@ class InvestigationRepository:
             _sources.validate_python(record.sources)
             if record.chart_config is not None:
                 ChartConfig.model_validate(record.chart_config)
+            result = _with_new_fields(record.result)
+            error = (
+                InvestigationError(
+                    code=record.error_code,
+                    message=record.error or "",
+                    service=record.error_service,
+                )
+                if record.error_code
+                else None
+            )
             return Investigation(
                 id=record.id,
                 title=record.title,
                 status=record.status,
                 data_mode=record.data_mode,
-                request=InvestigationRequest.model_validate(record.request),
-                result=InvestigationResult.model_validate(record.result),
+                request=InvestigationRequest.model_validate(record.request)
+                if record.request is not None
+                else None,
+                result=InvestigationResult.model_validate(result) if result is not None else None,
+                error=error,
+                run=InvestigationRun.model_validate(record.run) if record.run is not None else None,
                 created_at=record.created_at,
                 updated_at=record.updated_at,
             )
@@ -209,6 +243,160 @@ class InvestigationRepository:
             session.flush()
             session.refresh(record)
             return self._to_model(record)
+
+    def create_run(
+        self,
+        question: str | None,
+        selection: Selection | None,
+        data_mode: DataMode,
+        title: str,
+    ) -> Investigation:
+        """Save a run as ``pending``, with no request or result yet."""
+        run = InvestigationRun(
+            question=question,
+            selection=selection,
+            prompt_version=None,
+            model=None,
+            tool_calls=[],
+            validation=None,
+            usage=LLMUsage(calls=0, input_tokens=0, output_tokens=0, latency_ms=0),
+        )
+        record = InvestigationRecord(
+            title=title,
+            data_mode=data_mode,
+            status="pending",
+            question=question,
+            selections=selection.model_dump(mode="json") if selection else {},
+            run=run.model_dump(mode="json"),
+        )
+        with self._session() as session:
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return self._to_model(record)
+
+    def claim(self, investigation_id: uuid.UUID, pending_timeout_seconds: float) -> Claim:
+        """Move a ``pending`` investigation to ``running`` in one update.
+
+        Only one caller can win: the update matches the row only while it is
+        still ``pending``. A ``pending`` investigation older than
+        ``pending_timeout_seconds`` is not claimed; it is saved as ``failed``
+        with code ``not_started``. Otherwise the investigation is returned as
+        it is.
+        """
+        cutoff = datetime.now(UTC) - timedelta(seconds=pending_timeout_seconds)
+        with self._session() as session:
+            claimed = session.execute(
+                update(InvestigationRecord)
+                .where(
+                    InvestigationRecord.id == investigation_id,
+                    InvestigationRecord.status == "pending",
+                    InvestigationRecord.created_at > cutoff,
+                )
+                .values(status="running")
+                .returning(InvestigationRecord.id)
+            ).first()
+        if claimed is None:
+            self.mark_failed(
+                investigation_id,
+                InvestigationError(
+                    code="not_started",
+                    message="The investigation was not started in time.",
+                    service=None,
+                ),
+                statuses=("pending",),
+            )
+        return Claim(claimed=claimed is not None, investigation=self.get(investigation_id))
+
+    def save_success(
+        self,
+        investigation_id: uuid.UUID,
+        result: InvestigationResult,
+        run: InvestigationRun,
+    ) -> Investigation | None:
+        """Save a ``running`` investigation as ``succeeded``; ``None`` if it is not running."""
+        with self._session() as session:
+            record = session.get(InvestigationRecord, investigation_id, with_for_update=True)
+            if record is None:
+                raise InvestigationNotFoundError(investigation_id)
+            if record.status != "running":
+                return None
+            record.status = "succeeded"
+            if result.request is not None:
+                self._apply_request(record, result.request)
+                record.question = run.question
+            self._apply_result(record, result)
+            record.run = run.model_dump(mode="json")
+            session.flush()
+            session.refresh(record)
+            return self._to_model(record)
+
+    def mark_failed(
+        self,
+        investigation_id: uuid.UUID,
+        error: InvestigationError,
+        run: InvestigationRun | None = None,
+        statuses: tuple[str, ...] = ("pending", "running"),
+    ) -> bool:
+        """Save the investigation as ``failed`` if its status is in ``statuses``.
+
+        A failed investigation keeps no result, so nothing is presented as a
+        success. Returns whether the row changed.
+        """
+        values: dict[str, Any] = {
+            "status": "failed",
+            "error": error.message,
+            "error_code": error.code,
+            "error_service": error.service,
+            "result": None,
+        }
+        if run is not None:
+            values["run"] = run.model_dump(mode="json")
+        with self._session() as session:
+            changed = session.execute(
+                update(InvestigationRecord)
+                .where(
+                    InvestigationRecord.id == investigation_id,
+                    InvestigationRecord.status.in_(statuses),
+                )
+                .values(**values)
+                .returning(InvestigationRecord.id)
+            ).first()
+        return changed is not None
+
+    def sweep(self, running_timeout_seconds: float, pending_timeout_seconds: float) -> int:
+        """Fail runs a restart left behind; returns how many changed.
+
+        ``running`` longer than ``running_timeout_seconds`` becomes ``failed``
+        with code ``interrupted``; ``pending`` longer than
+        ``pending_timeout_seconds`` becomes ``failed`` with code ``not_started``.
+        """
+        now = datetime.now(UTC)
+        stale = (
+            (
+                InvestigationRecord.status == "running",
+                InvestigationRecord.updated_at < now - timedelta(seconds=running_timeout_seconds),
+                "interrupted",
+                "The run was interrupted by a restart.",
+            ),
+            (
+                InvestigationRecord.status == "pending",
+                InvestigationRecord.created_at < now - timedelta(seconds=pending_timeout_seconds),
+                "not_started",
+                "The investigation was not started in time.",
+            ),
+        )
+        changed = 0
+        with self._session() as session:
+            for status, older, code, message in stale:
+                rows = session.execute(
+                    update(InvestigationRecord)
+                    .where(status, older)
+                    .values(status="failed", error=message, error_code=code, result=None)
+                    .returning(InvestigationRecord.id)
+                ).all()
+                changed += len(rows)
+        return changed
 
     def get(self, investigation_id: uuid.UUID) -> Investigation:
         with self._session() as session:
@@ -275,14 +463,18 @@ class InvestigationRepository:
 
     def _summary(self, record: InvestigationRecord) -> InvestigationSummary:
         full = self._to_model(record)
+        request = full.request
+        selection = full.run.selection if full.run else None
+        countries = request.countries if request else selection.countries if selection else []
+        indicators = request.indicators if request else [selection.indicator] if selection else []
         return InvestigationSummary(
             id=full.id,
             title=full.title,
             status=full.status,
             data_mode=full.data_mode,
-            investigation_type=full.request.investigation_type,
-            countries=full.request.countries,
-            indicators=full.request.indicators,
+            investigation_type=request.investigation_type if request else None,
+            countries=countries,
+            indicators=indicators,
             created_at=full.created_at,
             updated_at=full.updated_at,
         )

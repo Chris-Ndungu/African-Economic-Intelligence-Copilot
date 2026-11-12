@@ -45,7 +45,6 @@ METHODS = ("get", "post", "put", "patch", "delete")
 
 # Operations in the contract that later issues implement.
 NOT_YET_IMPLEMENTED = {
-    ("POST", "/api/investigations/run"): "#28",
     ("GET", "/api/investigations/{investigation_id}/report"): "#32",
 }
 

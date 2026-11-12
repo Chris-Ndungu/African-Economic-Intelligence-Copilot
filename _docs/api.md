@@ -92,11 +92,12 @@ Every 4xx and 5xx response uses the shared `Error` schema:
 ```
 
 - `code` is machine-readable: `validation_error` (`422`), `not_found`
-  (`404`), `service_unavailable` (`503`) or `internal_error` (`500`)
+  (`404`), `step_limit_reached` (`422`), `service_unavailable` (`503`) or
+  `internal_error` (`500`)
 - `message` is for people
 - `service` names the service that failed, `gemini`, `data_service` or
   `database`, and is `null` when no service failed. It is set on every
-  `503`
+  `503` except a run over its time limit, which no single service caused
 - `details` lists per-field problems for `validation_error` and is empty
   otherwise
 
@@ -105,6 +106,68 @@ investigation returns `503` when Gemini or the data service is unavailable,
 rather than an uninterpreted or fabricated answer. FastAPI's default `422`
 body differs from this schema, so the backend must install exception
 handlers that return `Error`.
+
+### Running an investigation
+
+A run starts from a question, a selection (countries, one indicator, start
+and end) or both; with both, the selection limits what the analysis tools may
+query. A selection alone runs the question "Describe the trend in
+`<indicator>` for `<countries>` from `<start>` to `<end>`". A request with
+neither, or a question over 1,000 characters, is rejected with `422`.
+
+Gemini calls the approved analysis tools, then writes a structured
+interpretation whose every number is checked against the tool results (see
+`Interpretation`). The investigation is saved with its tool calls, prompt
+version, validation counts and token usage in `run`. A failed run is saved as
+`failed` with `error` set and no result, so nothing is presented as a
+success:
+
+| Outcome | Saved as | Response |
+| --- | --- | --- |
+| Interpreted (unverified numbers are flagged, not fatal) | `succeeded` | `200` |
+| Unsupported question | `succeeded`, `interpretation.unsupported_reason` set, no findings | `200` |
+| Gemini not configured, unavailable, blocked, truncated or timed out, or its reply unreadable | `failed`, `gemini_...` or `interpretation_invalid` | `503`, `service: gemini` |
+| Data service unavailable | `failed`, `data_unavailable` | `503`, `service: data_service` |
+| Step limit reached | `failed`, `step_limit_reached` | `422`, `code: step_limit_reached` |
+| Over the time limit (90 seconds by default) | `failed`, `timeout` | `503`, `service: null` |
+
+When the API starts, runs left `running` longer than the time limit are
+marked `failed` with code `interrupted`, and runs left `pending` longer than
+the pending timeout with code `not_started`.
+
+### Streaming a run
+
+`POST /api/investigations/run` runs the investigation inside the request and
+returns it saved. To show progress, a client uses two steps instead:
+
+1. `POST /api/investigations/runs` with the same body saves the
+   investigation as `pending` and returns `202` with its `id` and
+   `events_url`. It does not start the run.
+2. `GET /api/investigations/{investigation_id}/events` opens a
+   server-sent event stream. It is a `GET` with no body, so a browser reads
+   it with `EventSource` or the HTMX SSE extension, and the question never
+   appears in a URL or an access log.
+
+Opening the stream for a `pending` investigation claims it (`pending` to
+`running` in one database update, so two connections can never run it twice)
+and runs it inside the stream response. Nothing keeps running after the
+response ends: Cloud Run throttles the CPU once a response is sent, so there
+is no background work. If the client disconnects, the run is cancelled and
+saved as `failed` with code `client_disconnected`.
+
+Each event has an increasing `id`, an `event:` name and a JSON `data:`
+payload whose schema is in the contract: `started`, then `fetching_data`,
+`analysis_started` and `analysis_finished` for each tool call,
+`interpreting`, `validating`, and exactly one final `saved` or `failed`,
+after which the stream closes. A `: ping` comment is sent at least every 15
+seconds while a step runs, and responses set `Cache-Control: no-cache` and
+`X-Accel-Buffering: no` so proxies pass events through at once.
+
+Opening the stream again for a finished investigation sends only its final
+`saved` or `failed` event, which is what a reconnecting `EventSource` gets.
+For an investigation another connection is running, it sends one
+`in_progress` event and closes. A `pending` investigation not opened within
+5 minutes fails with code `not_started`.
 
 ### Pagination
 

@@ -1,0 +1,34 @@
+{
+  "description": "A finding that cites no result.",
+  "responses": [
+    {
+      "json": {
+        "summary": "Kenya's inflation rose by 1.1 percentage points between 2015 and 2023.",
+        "findings": [
+          {
+            "statement": "Kenya's inflation rose by 1.1 percentage points from 2015 to 2023, a linear trend of 0.085 percentage points per year.",
+            "label": "fact",
+            "result_ids": [],
+            "numbers": [
+              {
+                "value": 1.1,
+                "unit": "percentage points",
+                "result_id": "r1",
+                "field": "result.level_change.value"
+              },
+              {
+                "value": 0.085,
+                "unit": "percentage points per year",
+                "result_id": "r1",
+                "field": "result.slope.value"
+              }
+            ]
+          }
+        ],
+        "caveats": [],
+        "data_gaps": [],
+        "unsupported_reason": null
+      }
+    }
+  ]
+}

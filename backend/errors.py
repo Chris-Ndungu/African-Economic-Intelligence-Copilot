@@ -20,7 +20,7 @@ from copilot_core.repository import (
     InvalidStatusTransitionError,
     InvestigationNotFoundError,
 )
-from copilot_core.schemas import ErrorBody, ErrorDetail
+from copilot_core.schemas import ErrorBody, ErrorDetail, Investigation
 
 logger = logging.getLogger("backend.errors")
 
@@ -40,7 +40,22 @@ def responses(*codes: int) -> dict[int | str, dict[str, Any]]:
     return {code: ERROR_RESPONSES[code] for code in codes}
 
 
-def error(
+def json_responses(*codes: int) -> dict[int | str, dict[str, Any]]:
+    """Error responses for an operation whose success is not JSON, such as a stream.
+
+    FastAPI files a response ``model`` under the route's own media type, so
+    these name the ``application/json`` schema directly.
+    """
+    return {
+        code: {
+            "description": ERROR_RESPONSES[code]["description"],
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorBody"}}},
+        }
+        for code in codes
+    }
+
+
+def error_response(
     status: int,
     code: str,
     message: str,
@@ -56,6 +71,26 @@ def error(
     return JSONResponse(status_code=status, content=body.model_dump(mode="json"))
 
 
+class RunFailedError(Exception):
+    """A run was saved as ``failed``; the response explains why."""
+
+    def __init__(self, investigation: Investigation) -> None:
+        super().__init__(investigation.error.message if investigation.error else "failed")
+        self.investigation = investigation
+
+
+def run_failed(exc: RunFailedError) -> JSONResponse:
+    """``422`` for the step limit, ``503`` naming the service, ``500`` otherwise."""
+    error = exc.investigation.error
+    if error is None:
+        return error_response(500, "internal_error", "The investigation failed.")
+    if error.code == "step_limit_reached":
+        return error_response(422, "step_limit_reached", error.message)
+    if error.service is not None or error.code == "timeout":
+        return error_response(503, "service_unavailable", error.message, error.service)
+    return error_response(500, "internal_error", error.message)
+
+
 def _field(loc: tuple[Any, ...]) -> str:
     parts = list(loc)
     if parts and parts[0] in ("body", "query", "path"):
@@ -67,36 +102,42 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = [ErrorDetail(field=_field(e["loc"]), message=e["msg"]) for e in exc.errors()]
-        return error(422, "validation_error", "The request is invalid.", details=details)
+        return error_response(422, "validation_error", "The request is invalid.", details=details)
+
+    @app.exception_handler(RunFailedError)
+    async def failed_run(request: Request, exc: RunFailedError) -> JSONResponse:
+        return run_failed(exc)
 
     @app.exception_handler(InvalidRequestError)
     async def invalid(request: Request, exc: InvalidRequestError) -> JSONResponse:
         detail = ErrorDetail(field=exc.field, message=str(exc))
-        return error(422, "validation_error", str(exc), details=[detail])
+        return error_response(422, "validation_error", str(exc), details=[detail])
 
     @app.exception_handler(AnalysisError)
     @app.exception_handler(InvalidStatusTransitionError)
     @app.exception_handler(InvalidCursorError)
     async def rejected(request: Request, exc: Exception) -> JSONResponse:
-        return error(422, "validation_error", str(exc))
+        return error_response(422, "validation_error", str(exc))
 
     @app.exception_handler(InvestigationNotFoundError)
     async def not_found(request: Request, exc: InvestigationNotFoundError) -> JSONResponse:
-        return error(404, "not_found", str(exc))
+        return error_response(404, "not_found", str(exc))
 
     @app.exception_handler(DataUnavailableError)
     async def data_down(request: Request, exc: DataUnavailableError) -> JSONResponse:
         logger.error("data service unavailable: %s", exc)
-        return error(503, "service_unavailable", "The data service is unavailable.", "data_service")
+        return error_response(
+            503, "service_unavailable", "The data service is unavailable.", "data_service"
+        )
 
     @app.exception_handler(DatabaseUnavailableError)
     async def database_down(request: Request, exc: DatabaseUnavailableError) -> JSONResponse:
         logger.error("database unavailable: %s", exc)
-        return error(
+        return error_response(
             503, "service_unavailable", "The investigation database is unavailable.", "database"
         )
 
     @app.exception_handler(Exception)
     async def internal(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("unexpected error")
-        return error(500, "internal_error", "An unexpected error occurred.")
+        return error_response(500, "internal_error", "An unexpected error occurred.")

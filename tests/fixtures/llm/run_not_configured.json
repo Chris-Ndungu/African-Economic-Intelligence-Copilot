@@ -1,0 +1,9 @@
+{
+  "description": "Gemini has no API key.",
+  "responses": [
+    {
+      "error": "LLMNotConfigured",
+      "message": "Gemini is not configured"
+    }
+  ]
+}

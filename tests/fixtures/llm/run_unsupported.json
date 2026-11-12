@@ -1,0 +1,17 @@
+{
+  "description": "A forecast question, declined without tools.",
+  "responses": [
+    {
+      "text": "This asks for a forecast, which the data cannot answer."
+    },
+    {
+      "json": {
+        "summary": "Forecasts are not supported: the copilot describes past data only.",
+        "findings": [],
+        "caveats": [],
+        "data_gaps": [],
+        "unsupported_reason": "The question asks for a forecast of future inflation."
+      }
+    }
+  ]
+}

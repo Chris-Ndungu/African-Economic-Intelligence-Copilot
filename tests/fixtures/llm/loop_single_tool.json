@@ -1,0 +1,21 @@
+{
+  "description": "One tool call, then a final answer.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "KEN",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    }
+  ]
+}

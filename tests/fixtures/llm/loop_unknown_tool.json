@@ -1,0 +1,18 @@
+{
+  "description": "A call to a tool that is not registered.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "forecast_inflation",
+          "args": {
+            "country": "KEN"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    }
+  ]
+}

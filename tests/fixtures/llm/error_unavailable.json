@@ -1,0 +1,9 @@
+{
+  "description": "Gemini keeps returning 503.",
+  "responses": [
+    {
+      "error": "LLMUnavailable",
+      "message": "Gemini returned 503: unavailable"
+    }
+  ]
+}

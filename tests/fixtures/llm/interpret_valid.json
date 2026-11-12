@@ -1,0 +1,62 @@
+{
+  "description": "A valid structured interpretation.",
+  "responses": [
+    {
+      "json": {
+        "summary": "Kenya's inflation rose by 1.1 percentage points between 2015 and 2023, while Nigeria's trended up faster.",
+        "findings": [
+          {
+            "statement": "Kenya's inflation rose by 1.1 percentage points from 2015 to 2023, a linear trend of 0.085 percentage points per year.",
+            "label": "fact",
+            "result_ids": [
+              "r1"
+            ],
+            "numbers": [
+              {
+                "value": 1.1,
+                "unit": "percentage points",
+                "result_id": "r1",
+                "field": "result.level_change.value"
+              },
+              {
+                "value": 0.085,
+                "unit": "percentage points per year",
+                "result_id": "r1",
+                "field": "result.slope.value"
+              }
+            ]
+          },
+          {
+            "statement": "Nigeria's inflation trended up by 1.24 percentage points per year over 2015 to 2023.",
+            "label": "fact",
+            "result_ids": [
+              "r2"
+            ],
+            "numbers": [
+              {
+                "value": 1.24,
+                "unit": "percentage points per year",
+                "result_id": "r2",
+                "field": "result.slope.value"
+              }
+            ]
+          },
+          {
+            "statement": "Shared regional price pressures may explain why both rose; the data shows association, not cause.",
+            "label": "hypothesis",
+            "result_ids": [
+              "r1",
+              "r2"
+            ],
+            "numbers": []
+          }
+        ],
+        "caveats": [
+          "Explanations are limited to the indicators in the data."
+        ],
+        "data_gaps": [],
+        "unsupported_reason": null
+      }
+    }
+  ]
+}
