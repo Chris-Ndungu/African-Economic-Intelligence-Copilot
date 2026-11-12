@@ -88,3 +88,13 @@ def base_url():
         yield STACK_URL
     finally:
         subprocess.run([*COMPOSE, "down", "-v"], capture_output=True, timeout=300)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _app_is_reachable(base_url):
+    """Check the app before pytest-playwright starts a browser.
+
+    Starting the browser leaves an event loop running in the process, which breaks the
+    ``asyncio.run`` tests elsewhere in the suite, so a skipped e2e run must never start it.
+    """
+    return base_url

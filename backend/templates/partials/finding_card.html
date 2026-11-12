@@ -1,7 +1,7 @@
 <article class="finding-card{% if card.hypothesis %} is-hypothesis{% endif %}{% if card.unverified %} is-unverified{% endif %}" id="finding-{{ card.id }}">
   <p class="labels">
     {% if card.hypothesis %}<span class="label label-hypothesis">Hypothesis</span>
-    {% else %}<span class="label label-fact">Observed fact</span>{% endif %}
+    {% elif not card.unverified %}<span class="label label-fact">Observed fact</span>{% endif %}
     {% if card.unverified %}<span class="label label-unverified">Unverified</span>{% endif %}
     <span class="kind">{{ card.kind }}</span>
   </p>
