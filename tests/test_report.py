@@ -66,10 +66,10 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
 
-def full(findings=None, ifindings=(), **kw):
+def full(findings=None, ifindings=(), id=None, **kw):
     findings = [make_finding()] if findings is None else findings
     interpretation = make_interpretation(list(ifindings)) if ifindings else None
-    return make_investigation(make_result(findings, interpretation, **kw))
+    return make_investigation(make_result(findings, interpretation, **kw), id=id)
 
 
 def html(investigation, **kw):
@@ -488,7 +488,11 @@ def test_the_pdf_contains_one_image_per_chart_spec():
 
     investigation = two_chart_investigation()
     pdf = render_report_pdf(investigation, snapshot_date=SNAPSHOT, generated_at=GENERATED)
-    images = [image for page in PdfReader(io.BytesIO(pdf)).pages for image in page.images]
+    # WeasyPrint shares one resource dictionary between pages, so pypdf lists each image once
+    # per page; count each distinct image once.
+    images = list(
+        {image.data: image for page in PdfReader(io.BytesIO(pdf)).pages for image in page.images}
+    )
 
     assert len(images) == len(investigation.result.charts)
 
