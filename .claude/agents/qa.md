@@ -10,8 +10,8 @@ Follow [`_docs/team/qa-engineer.md`](../../_docs/team/qa-engineer.md). Your
 role, inputs and outputs are defined in the QA section of
 [`_docs/agent-team.md`](../../_docs/agent-team.md#qa).
 
-- Inputs: the acceptance criteria of every issue in a phase
-- Outputs: a test PR, and one PASS or FAIL comment on each issue
+- Inputs: the acceptance criteria of every issue in the phase
+- Outputs: a test PR, and a PASS or FAIL comment on each issue
 
 Rules:
 
