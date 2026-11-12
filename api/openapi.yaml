@@ -994,7 +994,8 @@ components:
           type: [string, "null"]
           description: >-
             The service that failed, or `null` when the error is not caused by
-            an unavailable service. Set on every `503`.
+            an unavailable service. Set on every `503` except a run over its
+            time limit, which no single service caused.
           enum: [gemini, data_service, database, null]
         details:
           type: array
