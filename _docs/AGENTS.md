@@ -35,6 +35,7 @@ Repository layout
 - `backend/` - FastAPI application: thin routes, settings, no business logic; `templates/` holds the Jinja pages and HTMX partials, and `static/` the CSS, small scripts and vendored files
 - `copilot_core/` - data access, analysis, Gemini orchestration and
   persistence, with no web-framework imports
+- `data/` - bundled data; `demo/` holds the demo snapshot: one Parquet file per curated table, the script that builds it and a README with its sources and licences
 - `tests/` - all Python tests, run with `uv run pytest`
 - `main.py` - placeholder entry point from `uv init`
 - `migrations/` - Alembic migrations; the database schema changes only through a new migration here

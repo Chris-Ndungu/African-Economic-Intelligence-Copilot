@@ -68,7 +68,6 @@ def test_commands_and_rules_keep_their_original_lines():
 def test_placeholders_name_the_issue_that_fills_them():
     expected = {
         "architecture.md": "#54",
-        "data-contract.md": "#5 and #6",
     }
     for name, issue in expected.items():
         text = (DOCS / name).read_text(encoding="utf-8")
@@ -230,3 +229,178 @@ def test_backlog_marks_the_react_tasks_superseded():
     for number in (9, 10):
         entry = re.search(rf"^## {number}\. .*?(?=^## |\Z)", text, re.S | re.M).group(0)
         assert "Superseded by #74" in entry, number
+
+
+DATA_CONTRACT = DOCS / "data-contract.md"
+MART_MODELS = {
+    "dim_country": "read by the copilot",
+    "dim_indicator": "read by the copilot",
+    "fact_macroeconomic_indicators": "read by the copilot",
+    "fact_fx_rates": "read by the copilot",
+    "mart_country_profile": "documented only, not read by the copilot",
+    "mart_fx_trends": "documented only, not read by the copilot",
+    "mart_inflation_gdp": "documented only, not read by the copilot",
+}
+EXPORT_HEADERS = {
+    "dim_country": "country_code,iso2_code,country_name,region,sub_region,"
+    "currency_code,income_group,capital",
+    "dim_indicator": "indicator_code,indicator_name,category,metric_unit,data_source",
+    "fact_fx_rates": "record_id,country_code,base_currency,data_source,fx_rate_usd,"
+    "rate_timestamp,loaded_at,ingestion_date",
+    "fact_macroeconomic_indicators": "indicator_key,record_id,country_code,"
+    "indicator_code,report_year,report_date,indicator_value,data_source,"
+    "is_forecast,loaded_at,ingestion_date",
+}
+
+
+def model_entry(model: str) -> str:
+    text = DATA_CONTRACT.read_text(encoding="utf-8")
+    match = re.search(rf"^### `{model}`\n(.*?)(?=^### |\Z)", text, re.S | re.M)
+    assert match, f"no entry for {model}"
+    return match.group(1)
+
+
+def table_rows(body: str) -> list[list[str]]:
+    rows = [line for line in body.splitlines() if line.startswith("|")]
+    return [[cell.strip() for cell in row.strip("|").split(" | ")] for row in rows[2:]]
+
+
+def test_data_contract_pins_the_ingestion_commit_and_states_its_source():
+    text = DATA_CONTRACT.read_text(encoding="utf-8")
+    assert "github.com/Chris-Ndungu/African-Market-Intelligence" in text
+    assert re.search(r"`[0-9a-f]{40}`", text), "full commit SHA"
+    assert "### Source of this contract" in text
+    for phrase in ("marts.yml", "README", "2026-11-11", "live BigQuery schema"):
+        assert phrase in text, phrase
+
+
+def test_data_contract_has_an_entry_for_every_mart_model():
+    for model, read_status in MART_MODELS.items():
+        entry = model_entry(model)
+        assert f"`<project>.dbt_african_macro.{model}`" in entry, model
+        assert "Grain:" in entry and "Primary key" in entry, model
+        assert f"**{read_status}**" in entry, model
+        assert "Source-metadata columns:" in entry, model
+        assert "dbt tests:" in entry, model
+
+
+def test_every_field_type_is_marked_unverified():
+    for model in MART_MODELS:
+        rows = table_rows(model_entry(model))
+        assert rows, model
+        for row in rows:
+            assert len(row) == 4, (model, row)
+            assert "unverified" in row[1], (model, row[0])
+
+
+def test_exported_models_list_the_export_columns_in_order():
+    for model, header in EXPORT_HEADERS.items():
+        columns = [row[0].strip("`") for row in table_rows(model_entry(model))]
+        assert columns == header.split(","), model
+
+
+def test_data_contract_names_no_gcp_project():
+    text = DATA_CONTRACT.read_text(encoding="utf-8")
+    assert re.findall(r"([\w<>-]+)\.dbt_african_macro\.", text)
+    assert set(re.findall(r"([\w<>-]+)\.dbt_african_macro\.", text)) == {"<project>"}
+
+
+def test_data_contract_explains_why_the_marts_are_not_read():
+    text = DATA_CONTRACT.read_text(encoding="utf-8")
+    match = re.search(
+        r"^### Why the copilot does not read the marts\n(.*?)(?=^### |\Z)",
+        text,
+        re.S | re.M,
+    )
+    assert match
+    note = match.group(1)
+    for phrase in ("copilot_core", "not exported", "14 capture", "13 days"):
+        assert phrase in note, phrase
+
+
+def test_indicator_area_table_places_every_indicator_code():
+    text = DATA_CONTRACT.read_text(encoding="utf-8")
+    match = re.search(r"^### Indicator areas\n(.*?)(?=^### |\Z)", text, re.S | re.M)
+    assert match
+    areas = {row[0]: row[2] for row in table_rows(match.group(1))}
+    for area in ("GDP", "Inflation", "Exchange rates", "Interest rates", "Trade", "Other"):
+        assert area in areas, area
+    placed = set(re.findall(r"`([A-Z0-9_.]+)`", " ".join(areas.values())))
+    codes = {
+        "BCA_NGDPD", "NGDPDPC", "NGDPD", "GGXWDG_NGDP", "GGXCNL_NGDP", "PCPIEPCH",
+        "PCPIPCH", "LP", "NGDP_RPCH", "LUR", "BN.CAB.XOKA.GD.ZS",
+        "FS.AST.PRVT.GD.ZS", "NE.EXP.GNFS.CD", "DT.DOD.DECT.CD",
+        "BX.KLT.DINV.CD.WD", "NY.GDP.MKTP.CD", "NY.GDP.MKTP.KD.ZG",
+        "NY.GDP.PCAP.CD", "NY.GNS.ICTR.ZS", "NE.IMP.GNFS.CD", "FP.CPI.TOTL.ZG",
+        "IT.CEL.SETS.P2", "SP.POP.TOTL", "SL.UEM.TOTL.ZS",
+    }
+    assert codes <= placed, codes - placed
+    assert "#6" in match.group(1)
+
+
+def test_data_contract_tables_are_well_formed():
+    lines = DATA_CONTRACT.read_text(encoding="utf-8").splitlines()
+    tables, current = [], []
+    for line in lines + [""]:
+        if line.startswith("|"):
+            current.append(line)
+        elif current:
+            tables.append(current)
+            current = []
+    for table in tables:
+        widths = {len(re.sub(r"`[^`]*`", "", row).strip().strip("|").split("|")) for row in table}
+        assert len(widths) == 1, table[0]
+
+
+def coverage_section() -> str:
+    text = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    return text[text.index("\n## Coverage") :]
+
+
+def test_data_contract_has_no_placeholder_once_coverage_is_written():
+    text = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    assert "Filled in by" not in text
+
+
+def test_coverage_section_has_the_required_subsections():
+    section = coverage_section()
+    for heading in (
+        "### How to reproduce",
+        "### Rules",
+        "### How `is_forecast` is set",
+        "### Coverage by indicator",
+        "### IMF forecast years",
+        "### Exchange rates",
+        "### Known gaps",
+        "### Inconsistencies",
+        "### Source preference",
+        "### Supported indicators",
+    ):
+        assert heading in section, heading
+    assert "2026-11-11" in section
+    assert "e61e67a" in section
+    assert "_docs/coverage.py <csv-dir>" in section
+
+
+def test_coverage_matrix_has_every_country_and_indicator():
+    import csv
+
+    rows = list(csv.DictReader((DOCS / "coverage.csv").open(encoding="utf-8")))
+    assert len(rows) == 54
+    assert len(rows[0]) == 2 + 24
+
+
+def test_every_indicator_is_supported_or_explained():
+    section = coverage_section()
+    supported = section[section.index("### Supported indicators") :]
+    table = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    codes = set(re.findall(r"^\| `([A-Z][A-Z0-9_.]+)` \| (?:IMF|World Bank) \|", table, re.M))
+    assert len(codes) == 24
+    for code in codes:
+        assert f"| `{code}` |" in supported, code
+
+
+def test_inflation_codes_use_the_imf_meaning():
+    section = coverage_section()
+    assert "**`PCPIPCH` is annual-average inflation and `PCPIEPCH` is\n   end-of-period inflation.**" in section
+    assert "gross\n   savings as a percent of GDP" in section
