@@ -26,6 +26,19 @@ Commands
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
 - `RUN_LIVE_GEMINI=1 uv run pytest tests/test_live_gemini.py` - the live Gemini smoke test and evaluation cases; they need `COPILOT_GEMINI_API_KEY` and are skipped otherwise. Every other test uses `StubLLMClient` with the recordings in `tests/fixtures/llm/`
+- `uv run pytest tests/test_report.py` - the PDF report tests; the ones that make a PDF are skipped, with the install steps in the message, when WeasyPrint's system libraries are missing, and the chart tests are skipped when Kaleido has no Chrome (see "PDF reports")
+
+PDF reports
+
+The PDF export (`GET /api/investigations/{id}/report`) needs two things the
+Python packages do not bring. Docker (`backend/Dockerfile`) and CI have both;
+on your machine:
+
+- WeasyPrint needs Pango and its libraries.
+  - Linux (Debian or Ubuntu): `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core`
+  - macOS: `brew install pango`; if Python still cannot find the libraries, set `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`
+  - Windows: install the GTK runtime (for example MSYS2: `pacman -S mingw-w64-x86_64-pango`, then put its `bin` folder on `PATH`), or run the app and tests in Docker. See https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation
+- Kaleido draws the charts with Chrome or Chromium. Install either one, or run `uv run kaleido_get_chrome` to download a copy; set `BROWSER_PATH` to the binary if it is not found. Without a browser the PDF is still made, with "Chart could not be rendered" in place of each chart.
 
 Rules
 

@@ -108,6 +108,7 @@ class ErrorBody(_Body):
     code: Literal[
         "validation_error",
         "not_found",
+        "conflict",
         "step_limit_reached",
         "service_unavailable",
         "internal_error",

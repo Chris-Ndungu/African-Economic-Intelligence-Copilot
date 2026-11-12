@@ -5,7 +5,16 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.19 /uv /bin/uv
 
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    BROWSER_PATH=/usr/bin/chromium
+
+# PDF reports: WeasyPrint needs Pango and a font (#32); Kaleido draws the
+# charts with Chromium (#33).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+        chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

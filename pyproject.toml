@@ -55,3 +55,8 @@ files = ["copilot_core", "backend"]
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+# These libraries ship no type information.
+[[tool.mypy.overrides]]
+module = ["plotly", "plotly.*", "weasyprint", "weasyprint.*"]
+ignore_missing_imports = true

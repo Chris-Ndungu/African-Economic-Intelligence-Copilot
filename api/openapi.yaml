@@ -502,7 +502,9 @@ paths:
         Renders a PDF report from the stored investigation result: findings,
         charts, methodology, sources, caveats and the generation time. It
         does not ask Gemini for a new answer. The report is labelled with its
-        data mode, which is also returned in the `X-Data-Mode` header.
+        data mode, which is also returned in the `X-Data-Mode` header. Only
+        `succeeded` investigations can be exported; one that is `pending`,
+        `running` or `failed` answers `409`.
       responses:
         "200":
           description: The PDF report.
@@ -512,7 +514,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/DataMode"
             Content-Disposition:
-              description: Suggested file name, for example `attachment; filename="investigation-7f9c2b1e.pdf"`.
+              description: >-
+                `attachment; filename="investigation-<YYYY-MM-DD>-<first 8 characters of the id>.pdf"`, where the date is the day the investigation was created (UTC), for example
+                `attachment; filename="investigation-2026-11-12-7f9c2b1e.pdf"`.
               schema:
                 type: string
           content:
@@ -526,6 +530,8 @@ paths:
                   value: "%PDF-1.7 ..."
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -573,6 +579,22 @@ components:
               value:
                 code: not_found
                 message: Investigation 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f was not found.
+                service: null
+                details: []
+    Conflict:
+      description: >-
+        The investigation is not in a state that allows this operation, for
+        example exporting one that is `pending`, `running` or `failed`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notSucceeded:
+              summary: Investigation has not succeeded
+              value:
+                code: conflict
+                message: Only succeeded investigations can be exported. This one is running.
                 service: null
                 details: []
     InternalError:
@@ -1033,7 +1055,7 @@ components:
         code:
           type: string
           description: Machine-readable error code.
-          enum: [validation_error, not_found, step_limit_reached, service_unavailable, internal_error]
+          enum: [validation_error, not_found, conflict, step_limit_reached, service_unavailable, internal_error]
         message:
           type: string
           description: Human-readable explanation of the error.

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from copilot_core.analysis import AnalysisError
 from copilot_core.data import DataUnavailableError, InvalidRequestError
+from copilot_core.report import InvestigationNotExportableError
 from copilot_core.repository import (
     DatabaseUnavailableError,
     InvalidCursorError,
@@ -28,6 +29,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ErrorBody, "description": description}
     for code, description in {
         404: "No saved investigation has this identifier.",
+        409: "The investigation is not in a state that allows this operation.",
         422: "The request is invalid.",
         500: "An unexpected server error.",
         503: "A service the operation depends on is unavailable.",
@@ -122,6 +124,12 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(InvestigationNotFoundError)
     async def not_found(request: Request, exc: InvestigationNotFoundError) -> JSONResponse:
         return error_response(404, "not_found", str(exc))
+
+    @app.exception_handler(InvestigationNotExportableError)
+    async def not_exportable(
+        request: Request, exc: InvestigationNotExportableError
+    ) -> JSONResponse:
+        return error_response(409, "conflict", str(exc))
 
     @app.exception_handler(DataUnavailableError)
     async def data_down(request: Request, exc: DataUnavailableError) -> JSONResponse:

@@ -94,7 +94,8 @@ Every 4xx and 5xx response uses the shared `Error` schema:
 ```
 
 - `code` is machine-readable: `validation_error` (`422`), `not_found`
-  (`404`), `step_limit_reached` (`422`), `service_unavailable` (`503`) or
+  (`404`), `conflict` (`409`, an investigation that is not `succeeded`
+  cannot be exported), `step_limit_reached` (`422`), `service_unavailable` (`503`) or
   `internal_error` (`500`)
 - `message` is for people
 - `service` names the service that failed, `gemini`, `data_service` or
@@ -136,6 +137,24 @@ success:
 When the API starts, runs left `running` longer than the time limit are
 marked `failed` with code `interrupted`, and runs left `pending` longer than
 the pending timeout with code `not_started`.
+
+### Exporting a report
+
+`GET /api/investigations/{investigation_id}/report` returns the saved
+investigation as `application/pdf`, built only from what was stored (no new
+Gemini call), with the same numbers, labels and caveats as the results page.
+
+- `Content-Disposition: attachment; filename="investigation-<YYYY-MM-DD>-<first 8 characters of the id>.pdf"`,
+  where the date is the day the investigation was created (UTC)
+- `X-Data-Mode` is the data mode of the investigation; a demo report says
+  "Sample data from <snapshot date>. Not live economic data." in the header
+  of every page
+- an unknown ID is `404`; a `pending`, `running` or `failed` investigation
+  is `409` with the `conflict` code and a message saying only succeeded
+  investigations can be exported
+- the charts are drawn by the same figure builder as the results page and
+  rendered to images with Plotly and Kaleido (#33); if one cannot be drawn
+  the report says "Chart could not be rendered" in its place
 
 ### Streaming a run
 
@@ -185,9 +204,9 @@ page.
 response schemas. It fails, naming the endpoint or field, when they
 disagree. Its docstring lists the differences it ignores (descriptions,
 ordering, schema names, FastAPI's default `422` when the contract has none).
-Operations not implemented yet, `runInvestigation` (#28) and
-`exportInvestigationPdf` (#32), are listed in the test and must be removed
-from that list when they are added.
+Operations in the contract that are not implemented yet are listed in the
+test and must be removed from that list when they are added; none are
+listed now.
 
 Phase 3 changed the contract before the code:
 

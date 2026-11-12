@@ -121,6 +121,26 @@ ERROR_MESSAGES: dict[str, ErrorMessage] = dict(
             "The investigation may still finish. Its saved outcome will appear in the history.",
         ),
         _entry(
+            "not_found",
+            "That investigation no longer exists",
+            "It may have been deleted. Go back to the workspace and pick another.",
+        ),
+        _entry(
+            "conflict",
+            "Only succeeded investigations can be exported",
+            "Wait for the investigation to finish, or run it again if it failed.",
+        ),
+        _entry(
+            "service_unavailable",
+            "A service is unavailable",
+            "The report could not be made right now. Try again in a few minutes.",
+        ),
+        _entry(
+            "validation_error",
+            "The request was not valid",
+            "Reload the page and try again.",
+        ),
+        _entry(
             "unsupported_question",
             "This question is not supported",
             "Ask about a supported indicator, country or period.",
@@ -128,7 +148,14 @@ ERROR_MESSAGES: dict[str, ErrorMessage] = dict(
     ]
 )
 
-UI_CODES = ("connection_lost", "unsupported_question")
+UI_CODES = (
+    "connection_lost",
+    "unsupported_question",
+    "not_found",
+    "conflict",
+    "service_unavailable",
+    "validation_error",
+)
 """Codes the page shows that a run is never saved with."""
 
 RUN_CODES: tuple[str, ...] = get_args(InvestigationErrorCode)
