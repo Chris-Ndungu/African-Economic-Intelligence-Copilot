@@ -73,6 +73,11 @@ Branch, PR and merge
    Agents never merge
 7. The issues close when the PR that closes them is merged
 
+`main` is protected by a GitHub ruleset: changes land only through a pull
+request, the CI check "Lint, type check and test" must pass before merging,
+and force-pushes and deleting `main` are blocked. No second reviewer is
+required, so the owner can merge a passing PR.
+
 Tracker
 
 - Project board: TODO - link added once the board is created
