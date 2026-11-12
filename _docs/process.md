@@ -1,4 +1,5 @@
-- Tasks are GitHub issues, one at a time
+- Tasks are GitHub issues, one at a time, or a small batch of related issues
+  that change the same files
 - Read the acceptance criteria before starting and before closing
 - Commit regularly
 
@@ -10,14 +11,31 @@ Roles
 
 Orchestrator
 
-The main session is the orchestrator. It launches the PM, the engineer
-and QA as subagents. It does not groom, implement or test itself.
+The main session is the orchestrator. It picks the track for each issue
+(below), does light-track work itself, and launches the engineer and QA as
+subagents for full-track work.
+
+Every subagent starts with no context, so its brief carries what the
+orchestrator already knows: the issue number, the files to read and edit,
+findings and decisions made so far, and what not to re-check. A subagent
+reads only what the issue and its brief point to.
+
+Tracks
+
+- Light track: documentation, data files, configuration, templates and
+  small fixes that change no behaviour in `copilot_core` or the API. The
+  orchestrator implements it and runs `uv run pytest`. QA runs once, as a
+  short check of each criterion against the diff
+- Full track: new or changed behaviour in `copilot_core`, the API or the
+  UI. The engineer subagent implements it and QA verifies it
+- When in doubt, use the full track
 
 Lifecycle
 
 1. Pick the next open issue from the backlog
-2. PM grooms it
-3. Engineer implements it
+2. If the issue does not yet follow `_docs/task-template.md`, the PM grooms
+   it. Related issues are groomed together in one PM run
+3. The engineer, or the orchestrator on the light track, implements it
 4. QA verifies it
 5. On FAIL, back to step 3 with the QA comment as input
 6. On PASS, close the issue
@@ -25,18 +43,27 @@ Lifecycle
 
 Rules
 
-- Do not skip step 2
+- Step 2 is skipped only when the issue already follows the template and
+  its criteria still match the situation. If they no longer match, the PM
+  re-grooms it
 - The engineer does not close the issue
 - QA does not fix the code, only outputs PASS or FAIL
+- QA checks each criterion against the diff and runs the tests. It does
+  not repeat checks the brief lists as already done, and does not clone
+  repositories or fetch web pages unless a criterion needs it
 - The orchestrator closes the issue only after QA outputs PASS
+- Slow setup, such as downloading a tool, is done once before launching
+  subagents, not inside each one
 
 Branch, PR and merge
 
-1. The PM grooms the issue so it follows `_docs/task-template.md`
+1. The PM grooms the issue so it follows `_docs/task-template.md`, or it
+   already does
 2. Create a branch from an up-to-date `main`, named `<issue number>-<short-description>`,
-   for example `4-project-skills`
-3. Commit on that branch, regularly, with clear messages
-4. Open a PR into `main` that links the issue with a `Closes #<issue number>` line
+   for example `4-project-skills`. A batch uses the first issue's number
+3. Commit on that branch, regularly, with clear messages, one commit per
+   issue in a batch
+4. Open a PR into `main` that links each issue with a `Closes #<issue number>` line
 5. Review the PR: QA checks every acceptance criterion in the issue
 6. A human merges the PR, only after every acceptance criterion is checked.
    Agents never merge
