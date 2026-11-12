@@ -31,14 +31,16 @@ def test_process_has_numbered_branch_pr_merge_steps():
     flat = " ".join(steps.split())
     for phrase in (
         "grooms the issue",
-        "branch from an up-to-date `main`",
-        "`<issue number>-<short-description>`",
-        "`4-project-skills`",
+        "one branch, created from an up-to-date `main`",
+        "`phase-<number>-<short-description>`",
+        "`phase-2-walking-skeleton`",
+        "Issues do not get their own branches",
+        "`Refs #<issue number>`",
         "`Closes #<issue number>`",
         "A human merges the PR",
         "every acceptance criterion is checked",
         "Agents never merge",
-        "The issue closes",
+        "The issues close",
     ):
         assert phrase in flat, phrase
 
