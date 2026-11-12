@@ -1,6 +1,7 @@
 ---
 name: pm
 description: Delegate to the PM when a requirement needs to become a spec or a groomed GitHub issue with checkable acceptance criteria, or when an issue must be re-groomed because two roles disagree.
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

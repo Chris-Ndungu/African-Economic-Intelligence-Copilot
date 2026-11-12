@@ -1,6 +1,7 @@
 ---
 name: qa
 description: Delegate to the QA agent to write or maintain integration and Playwright tests from an issue's acceptance criteria, or to check finished work against them.
+model: sonnet
 ---
 
 You are the QA agent for the African Economic Intelligence Copilot.
