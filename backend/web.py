@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from backend.dependencies import get_data_service, get_repository
 from copilot_core.data import DataError, DataService, DataUnavailableError
+from copilot_core.formatting import format_number
 from copilot_core.investigation import run_trend_investigation
 from copilot_core.models import SeriesResult
 from copilot_core.repository import RepositoryError
@@ -40,11 +41,14 @@ STATIC_DIR = HERE / "static"
 # The vendored HTMX file, pinned to an exact release. See
 # backend/static/vendor/README.md for its source URL and SHA-256.
 HTMX_FILE = "vendor/htmx-2.0.11.min.js"
+PLOTLY_FILE = "vendor/plotly-basic-2.35.2.min.js"
 
 # Jinja2Templates turns autoescaping on for `.html` templates, so any value
 # a page renders is escaped unless a template marks it safe.
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["htmx_file"] = HTMX_FILE
+templates.env.globals["plotly_file"] = PLOTLY_FILE
+templates.env.filters["number"] = format_number
 
 router = APIRouter(include_in_schema=False)
 

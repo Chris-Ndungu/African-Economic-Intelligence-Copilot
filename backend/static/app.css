@@ -166,3 +166,20 @@ body {
 .htmx-indicator { opacity: 0; margin: 0; font-size: 0.875rem; color: var(--color-muted); transition: opacity 150ms ease-in; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
 .selection select:focus-visible, .selection input:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+
+/* Charts and tables */
+.chart-figure { margin: 1rem 0; max-width: 100%; }
+.chart-title { font-weight: 600; }
+.plotly-chart { width: 100%; min-height: 320px; }
+.chart-note, .chart-source { margin: 0.25rem 0; color: var(--color-muted); font-size: 0.875rem; }
+.chart-empty { border: 1px dashed var(--color-border); border-radius: var(--radius); padding: 0.75rem; color: var(--color-muted); }
+.data-table-wrap { overflow-x: auto; }
+.data-table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.data-table caption { text-align: left; font-weight: 600; padding-bottom: 0.25rem; }
+.data-table th, .data-table td { border: 1px solid var(--color-border); padding: 0.25rem 0.5rem; text-align: right; }
+.data-table th[scope="col"] { background: var(--color-surface); }
+.data-table th:first-child { text-align: left; }
+.data-table th[aria-sort="ascending"]::after { content: " \25B2"; }
+.data-table th[aria-sort="descending"]::after { content: " \25BC"; }
+.data-table th:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.data-table td.missing { color: var(--color-muted); }
