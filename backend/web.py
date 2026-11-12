@@ -11,10 +11,20 @@ over HTTP.
 """
 
 from pathlib import Path
+from typing import Annotated
+from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+
+from backend.dependencies import get_data_service, get_repository
+from copilot_core.data import DataError, DataService, DataUnavailableError
+from copilot_core.investigation import run_trend_investigation
+from copilot_core.models import SeriesResult
+from copilot_core.repository import RepositoryError
+from copilot_core.schemas import InvestigationCreate
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = HERE / "templates"
@@ -31,8 +41,121 @@ templates.env.globals["htmx_file"] = HTMX_FILE
 
 router = APIRouter(include_in_schema=False)
 
+CHART_WIDTH, CHART_HEIGHT, CHART_PAD = 640, 240, 24
+
+
+def chart_points(series: SeriesResult) -> list[list[tuple[float, float]]]:
+    """SVG coordinates of the series, one line per run of non-missing values.
+
+    A missing value breaks the line rather than being drawn as zero.
+    """
+    values = [p.value for p in series.points]
+    present = [v for v in values if v is not None]
+    if not present:
+        return []
+    low, high = min(present), max(present)
+    spread = (high - low) or 1.0
+    step = (CHART_WIDTH - 2 * CHART_PAD) / max(len(values) - 1, 1)
+    lines: list[list[tuple[float, float]]] = [[]]
+    for index, value in enumerate(values):
+        if value is None:
+            if lines[-1]:
+                lines.append([])
+            continue
+        x = CHART_PAD + index * step
+        y = CHART_HEIGHT - CHART_PAD - (value - low) / spread * (CHART_HEIGHT - 2 * CHART_PAD)
+        lines[-1].append((round(x, 1), round(y, 1)))
+    return [line for line in lines if line]
+
+
+def _get_data(request: Request) -> DataService | None:
+    try:
+        return get_data_service(request)
+    except DataUnavailableError:
+        return None
+
 
 @router.get("/", response_class=HTMLResponse)
 def workspace(request: Request) -> HTMLResponse:
-    """The empty workspace shell."""
-    return templates.TemplateResponse(request, "pages/workspace.html")
+    """The workspace: pick a country, an indicator and a period."""
+    data = _get_data(request)
+    countries = indicators = []
+    if data is not None:
+        try:
+            countries, indicators = data.list_countries(), data.list_indicators()
+        except DataUnavailableError:
+            data = None
+    return templates.TemplateResponse(
+        request,
+        "pages/workspace.html",
+        {"countries": countries, "indicators": indicators, "data_available": data is not None},
+    )
+
+
+@router.get("/partials/trend", response_class=HTMLResponse)
+def trend_partial(
+    request: Request,
+    data: Annotated[DataService, Depends(get_data_service)],
+    country: Annotated[str, Query()],
+    indicator: Annotated[str, Query()],
+    start: Annotated[str, Query()],
+    end: Annotated[str, Query()],
+) -> HTMLResponse:
+    """The trend of one series, its chart and a button to save it."""
+    try:
+        investigation = run_trend_investigation(data, country, indicator, start, end)
+    except DataError as exc:
+        return _message(request, str(exc), 422)
+    return templates.TemplateResponse(
+        request,
+        "partials/trend.html",
+        {
+            "investigation": investigation,
+            "lines": chart_points(investigation.series),
+            "chart": {"width": CHART_WIDTH, "height": CHART_HEIGHT},
+            "selection": {"country": country, "indicator": indicator, "start": start, "end": end},
+        },
+    )
+
+
+@router.post("/partials/investigations", response_class=HTMLResponse)
+async def save_partial(
+    request: Request, data: Annotated[DataService, Depends(get_data_service)]
+) -> HTMLResponse:
+    """Save the trend investigation for a selection.
+
+    The result is computed again here from the selection rather than taken
+    from the page, so only numbers computed in Python are saved. The form
+    is URL-encoded and parsed with the standard library.
+    """
+    form = {k: v[0] for k, v in parse_qs((await request.body()).decode()).items()}
+    missing = [f for f in ("title", "country", "indicator", "start", "end") if not form.get(f)]
+    if missing:
+        return _message(request, f"Missing fields: {', '.join(missing)}.", 422)
+    return await run_in_threadpool(_save, request, data, form)
+
+
+def _save(request: Request, data: DataService, form: dict[str, str]) -> HTMLResponse:
+    try:
+        investigation = run_trend_investigation(
+            data, form["country"], form["indicator"], form["start"], form["end"]
+        )
+        body = InvestigationCreate(
+            title=form["title"][:200],
+            status="succeeded",
+            request=investigation.result.request,
+            result=investigation.result,
+        )
+        saved = get_repository(request).create(body, data_mode=body.result.data_mode)
+    except DataError as exc:
+        return _message(request, str(exc), 422)
+    except RepositoryError:
+        message = "The investigation could not be saved: the database is unavailable."
+        return _message(request, message, 503)
+    return templates.TemplateResponse(request, "partials/saved.html", {"investigation": saved})
+
+
+def _message(request: Request, message: str, status_code: int) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "partials/message.html", {"message": message}, status_code=status_code
+    )

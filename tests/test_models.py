@@ -13,6 +13,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from copilot_core.models import (
+    AnomalyPoint,
     AnomalyResult,
     BaselineResult,
     ComparisonEntry,
@@ -105,7 +106,21 @@ def series(**overrides):
 
 
 def comparison_entry(**overrides):
-    return {**numeric(rank=1), **overrides}
+    data = numeric(
+        rank=1,
+        status="ranked",
+        first_period="2018",
+        last_period="2022",
+        observation_count=5,
+        shared_count=5,
+        excluded_periods=[],
+        mean=6.0,
+        median=5.4,
+        minimum=4.7,
+        maximum=7.7,
+        standard_deviation=1.15,
+    )
+    return {**data, **overrides}
 
 
 def comparison(**overrides):
@@ -113,6 +128,9 @@ def comparison(**overrides):
         "id": "comparison-1",
         "metric": "inflation_cpi",
         "method": method(name="rank_by_value", description="Ranked by value.", parameters={}),
+        "shared_periods": ["2018", "2019", "2020", "2021", "2022"],
+        "ranking_period": "2022",
+        "caveats": [],
         "entries": [
             comparison_entry(value=18.8, rank=1, geography=geography("NGA", "Nigeria")),
             comparison_entry(value=7.7, rank=2),
@@ -129,20 +147,49 @@ def baseline(**overrides):
         baseline_period=period("2018", "2021"),
         difference=2.35,
         percent_difference=43.93,
+        median=5.3,
+        standard_deviation=0.59,
+        z_score=3.98,
+        percentile_rank=100.0,
+        window_count=4,
+        missing_count=0,
+    )
+    return {**data, **overrides}
+
+
+def anomaly_point(**overrides):
+    data = numeric(
+        status="flagged",
+        reason=None,
+        is_anomaly=True,
+        score=3.98,
+        threshold=2,
+        expected_value=5.35,
+        direction="up",
+        window=period("2018", "2021"),
+        baseline_mean=5.35,
+        baseline_standard_deviation=0.59,
+        q1=None,
+        q3=None,
+        iqr=None,
     )
     return {**data, **overrides}
 
 
 def anomaly(**overrides):
-    data = numeric(
-        id="anomaly-1",
-        metric="inflation_cpi",
-        is_anomaly=True,
-        score=3.98,
-        threshold=2,
-        expected_value=5.35,
-        direction="above",
-    )
+    data = {
+        "id": "anomaly-1",
+        "metric": "inflation_cpi",
+        "unit": "percent",
+        "period": period("2018", "2022"),
+        "geography": geography(),
+        "method": method(),
+        "source": source(),
+        "caveats": [],
+        "scored_count": 1,
+        "flagged_count": 1,
+        "points": [anomaly_point()],
+    }
     return {**data, **overrides}
 
 
@@ -152,6 +199,7 @@ RESULT_BUILDERS = {
     ComparisonEntry: comparison_entry,
     ComparisonResult: comparison,
     BaselineResult: baseline,
+    AnomalyPoint: anomaly_point,
     AnomalyResult: anomaly,
 }
 
@@ -179,7 +227,7 @@ def test_valid_data_builds(model):
 
 def test_contract_example_values_build():
     """Values shaped like the InvestigationResultExample in api/openapi.yaml."""
-    result = AnomalyResult.model_validate(anomaly())
+    result = AnomalyPoint.model_validate(anomaly_point())
     assert result.geography.country_code == "KEN"
     assert result.source.last_updated == date(2026, 6, 30)
     assert result.method.parameters == {"baseline_periods": 4, "threshold": 2.0}
@@ -190,7 +238,7 @@ def test_contract_example_values_build():
 
 
 @pytest.mark.parametrize(
-    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyResult], ids=lambda m: m.__name__
+    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyPoint], ids=lambda m: m.__name__
 )
 @pytest.mark.parametrize("field", ["value", "unit", "period", "geography", "method", "source"])
 def test_numeric_results_require_citation_fields(model, field):
@@ -393,7 +441,7 @@ NON_FINITE = [math.nan, math.inf, -math.inf]
 
 @pytest.mark.parametrize("bad", NON_FINITE, ids=["nan", "inf", "-inf"])
 @pytest.mark.parametrize(
-    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyResult], ids=lambda m: m.__name__
+    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyPoint], ids=lambda m: m.__name__
 )
 def test_value_rejects_nan_and_infinity(model, bad):
     with pytest.raises(ValidationError) as exc:
@@ -408,9 +456,9 @@ def test_value_rejects_nan_and_infinity(model, bad):
         (BaselineResult, "baseline_value"),
         (BaselineResult, "difference"),
         (BaselineResult, "percent_difference"),
-        (AnomalyResult, "score"),
-        (AnomalyResult, "threshold"),
-        (AnomalyResult, "expected_value"),
+        (AnomalyPoint, "score"),
+        (AnomalyPoint, "threshold"),
+        (AnomalyPoint, "expected_value"),
     ],
 )
 def test_derived_numbers_reject_nan_and_infinity(model, field, bad):
@@ -437,23 +485,25 @@ def test_integer_value_is_accepted_as_number():
 
 
 @pytest.mark.parametrize(
-    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyResult], ids=lambda m: m.__name__
+    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyPoint], ids=lambda m: m.__name__
 )
 def test_missing_value_without_caveat_is_rejected(model):
     data = RESULT_BUILDERS[model](value=None, caveats=[])
     if model is ComparisonEntry:
         data["rank"] = None
+        data["status"] = "unranked"
     with pytest.raises(ValidationError, match="caveats must explain why value is missing"):
         model.model_validate(data)
 
 
 @pytest.mark.parametrize(
-    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyResult], ids=lambda m: m.__name__
+    "model", [Finding, ComparisonEntry, BaselineResult, AnomalyPoint], ids=lambda m: m.__name__
 )
 def test_missing_value_with_caveat_is_accepted(model):
     data = RESULT_BUILDERS[model](value=None, caveats=["2022 is missing in the source."])
     if model is ComparisonEntry:
         data["rank"] = None
+        data["status"] = "unranked"
     assert model.model_validate(data).value is None
 
 
@@ -463,8 +513,9 @@ def test_missing_value_with_caveat_is_accepted(model):
         (BaselineResult, "baseline_value"),
         (BaselineResult, "difference"),
         (BaselineResult, "percent_difference"),
-        (AnomalyResult, "score"),
-        (AnomalyResult, "expected_value"),
+        (BaselineResult, "median"),
+        (BaselineResult, "z_score"),
+        (ComparisonEntry, "mean"),
     ],
 )
 def test_missing_derived_number_requires_caveat(model, field):
@@ -503,7 +554,7 @@ def test_comparison_rank_starts_at_one():
 
 def test_anomaly_threshold_cannot_be_missing():
     with pytest.raises(ValidationError) as exc:
-        AnomalyResult.model_validate(anomaly(threshold=None, caveats=["x"]))
+        AnomalyPoint.model_validate(anomaly_point(threshold=None, caveats=["x"]))
     assert error_locs(exc.value) == ["threshold"]
 
 
@@ -704,7 +755,9 @@ def with_parameters(builder, parameters):
                 comparison_entry(value=7.7, rank=2, method=params),
             ],
         )
-    if builder in (finding, series, comparison_entry, baseline, anomaly):
+    if builder is anomaly:
+        return builder(method=params, points=[anomaly_point(method=params)])
+    if builder in (finding, series, comparison_entry, baseline, anomaly_point):
         return builder(method=params)
     return builder()
 
@@ -716,6 +769,7 @@ COPY_MODELS = {
     SeriesResult: series,
     ComparisonResult: comparison,
     BaselineResult: baseline,
+    AnomalyPoint: anomaly_point,
     AnomalyResult: anomaly,
     Method: method,
 }
@@ -737,6 +791,7 @@ def methods_of(m):
         return [m]
     found = [m.method] if hasattr(m, "method") else []
     found += [entry.method for entry in getattr(m, "entries", ())]
+    found += [point.method for point in getattr(m, "points", ()) if hasattr(point, "method")]
     return found
 
 
@@ -917,12 +972,15 @@ def contract_digest():
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
-# contract_digest() computed with copilot_core/models.py at b086c7b.
-CONTRACT_DIGEST_AT_B086C7B = "96f449bd4747e1fc89581ab06681b8e132106f85c53ea8c19fc24e9a40ff3f2e"
+# contract_digest() computed with copilot_core/models.py after Phase 3 added
+# the analysis fields (comparison statistics, baseline percentile rank and
+# z-score, per-point anomaly status) and source indicator codes. Update it
+# only together with api/openapi.yaml.
+CONTRACT_DIGEST = "785115481bf318310c789bcce986b5e3666672f423ea857579a779d77c4fbc90"
 
 
-def test_dumps_and_schemas_are_unchanged_since_b086c7b():
-    assert contract_digest() == CONTRACT_DIGEST_AT_B086C7B
+def test_dumps_and_schemas_are_unchanged():
+    assert contract_digest() == CONTRACT_DIGEST
 
 
 # --- Match the contract ------------------------------------------------------
@@ -946,19 +1004,31 @@ CONTRACT = {
     ),
     ComparisonEntry: (
         "ComparisonEntry",
-        {"value", "unit", "period", "geography", "method", "source", "caveats", "rank"},
+        {"value", "unit", "period", "geography", "method", "source", "caveats", "rank"}
+        | {"status", "first_period", "last_period", "observation_count", "shared_count"}
+        | {"excluded_periods", "mean", "median", "minimum", "maximum", "standard_deviation"},
     ),
-    ComparisonResult: ("ComparisonResult", {"id", "metric", "method", "entries"}),
+    ComparisonResult: (
+        "ComparisonResult",
+        {"id", "metric", "method", "shared_periods", "ranking_period", "caveats", "entries"},
+    ),
     BaselineResult: (
         "BaselineResult",
         {"value", "unit", "period", "geography", "method", "source", "caveats"}
         | {"id", "metric", "baseline_value", "baseline_period", "difference"}
-        | {"percent_difference"},
+        | {"percent_difference", "median", "standard_deviation", "z_score", "percentile_rank"}
+        | {"window_count", "missing_count"},
+    ),
+    AnomalyPoint: (
+        "AnomalyPoint",
+        {"value", "unit", "period", "geography", "method", "source", "caveats"}
+        | {"status", "reason", "is_anomaly", "score", "threshold", "expected_value", "direction"}
+        | {"window", "baseline_mean", "baseline_standard_deviation", "q1", "q3", "iqr"},
     ),
     AnomalyResult: (
         "AnomalyResult",
-        {"value", "unit", "period", "geography", "method", "source", "caveats"}
-        | {"id", "metric", "is_anomaly", "score", "threshold", "expected_value", "direction"},
+        {"id", "metric", "unit", "period", "geography", "method", "source", "caveats"}
+        | {"scored_count", "flagged_count", "points"},
     ),
 }
 
@@ -988,7 +1058,7 @@ def test_contract_period_label_accepts_daily_dates():
     "model, field, values",
     [
         (Finding, "kind", ["trend", "comparison", "baseline", "anomaly", "data_gap"]),
-        (AnomalyResult, "direction", ["above", "below", None]),
+        (AnomalyPoint, "direction", ["up", "down", None]),
         (Period, "frequency", ["annual", "quarterly", "monthly", "daily"]),
     ],
 )

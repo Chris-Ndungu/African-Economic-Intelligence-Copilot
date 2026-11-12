@@ -8,10 +8,13 @@ tools use. An invalid value raises a `pydantic.ValidationError` that names
 the setting, which stops startup.
 """
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from copilot_core.data import DEFAULT_DATA_DIR
 
 
 class Settings(BaseSettings):
@@ -27,6 +30,9 @@ class Settings(BaseSettings):
 
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     """Log level for the application loggers."""
+
+    data_dir: Path = DEFAULT_DATA_DIR
+    """Folder of the demo Parquet files read by the data service."""
 
     database_url: SecretStr | None = Field(default=None, validation_alias="DATABASE_URL")
     """Postgres connection string, or `None` when no database is configured.

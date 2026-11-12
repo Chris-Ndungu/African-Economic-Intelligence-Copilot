@@ -131,7 +131,7 @@ def test_migrations_have_a_single_head(tmp_path):
     result = run_alembic("heads", env_overrides={}, cwd=tmp_path)
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.split() == ["0001", "(head)"]
+    assert result.stdout.split() == ["0002", "(head)"]
 
 
 def test_investigations_table_has_the_required_columns():
@@ -141,6 +141,9 @@ def test_investigations_table_has_the_required_columns():
     assert set(table.columns.keys()) == {
         "id",
         "question",
+        "title",
+        "request",
+        "result",
         "selections",
         "parameters",
         "findings",
@@ -154,7 +157,7 @@ def test_investigations_table_has_the_required_columns():
     }
     assert [c.name for c in table.primary_key] == ["id"]
     nullable = {c.name for c in table.columns if c.nullable}
-    assert nullable == {"question", "chart_config", "error"}
+    assert nullable == {"question", "request", "result", "chart_config", "error"}
     for name in ("created_at", "updated_at"):
         assert table.columns[name].type.timezone is True
 

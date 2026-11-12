@@ -1,0 +1,39 @@
+{% set series = investigation.series %}
+{% set trend = investigation.trend %}
+<section class="result" aria-label="Trend">
+  <h2>{{ series.geography.country_name }}: {{ series.metric }}, {{ series.period.start }}–{{ series.period.end }}</h2>
+  <p class="unit">Unit: {{ series.unit }}. Source: {{ series.source.name }}{% if series.source.last_updated %}, updated {{ series.source.last_updated }}{% endif %}.</p>
+  {% if lines %}
+  <svg class="chart" role="img" viewBox="0 0 {{ chart.width }} {{ chart.height }}" aria-label="Line chart of {{ series.metric }} for {{ series.geography.country_name }}">
+    {% for line in lines %}
+    {% if line|length == 1 %}
+    <circle cx="{{ line[0][0] }}" cy="{{ line[0][1] }}" r="3" class="chart-point"></circle>
+    {% else %}
+    <polyline class="chart-line" points="{% for x, y in line %}{{ x }},{{ y }} {% endfor %}"></polyline>
+    {% endif %}
+    {% endfor %}
+  </svg>
+  {% endif %}
+  <dl class="numbers">
+    {% for label, item in [("Trend (slope)", trend.slope), ("Change", trend.level_change), ("Percentage change", trend.percent_change), ("R²", trend.r_squared)] %}
+    <dt>{{ label }}</dt>
+    <dd>{% if item.value is none %}missing{% else %}{{ "%.3f"|format(item.value) }} {{ item.unit }}{% endif %}
+      <span class="period">({{ item.period.start }}–{{ item.period.end }})</span></dd>
+    {% endfor %}
+  </dl>
+  {% for finding in investigation.result.findings %}
+  <p class="finding">{{ finding.statement }}</p>
+  {% endfor %}
+  {% if investigation.result.caveats %}
+  <ul class="caveats">
+    {% for caveat in investigation.result.caveats %}<li>{{ caveat }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <form class="save" hx-post="/partials/investigations" hx-target="this" hx-swap="outerHTML">
+    {% for name, value in selection.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <label for="title">Title</label>
+    <input id="title" name="title" maxlength="200" required
+           value="{{ series.geography.country_name }} {{ series.metric }} {{ series.period.start }}–{{ series.period.end }}">
+    <button class="button" type="submit">Save investigation</button>
+  </form>
+</section>

@@ -107,15 +107,15 @@ paths:
                   value:
                     data_mode: demo
                     indicators:
-                      - code: inflation_cpi
-                        name: Consumer price inflation
+                      - code: PCPIPCH
+                        name: IMF DataMapper
                         category: inflation
-                        unit: percent
+                        unit: "%"
                         frequency: annual
                         description: Annual percentage change in the consumer price index.
                         source:
-                          id: mart_inflation
-                          name: Consumer price inflation
+                          id: fact_macroeconomic_indicators
+                          name: IMF DataMapper
                           provider: IMF
                           url: null
                           last_updated: "2026-06-30"
@@ -166,7 +166,7 @@ paths:
                     data_mode: demo
                     entries:
                       - country_code: KEN
-                        indicator_code: inflation_cpi
+                        indicator_code: PCPIPCH
                         frequency: annual
                         first_period: "2000"
                         last_period: "2023"
@@ -204,7 +204,7 @@ paths:
                   question: Why did inflation in Kenya rise in 2022?
                   investigation_type: anomaly
                   countries: [KEN, NGA]
-                  indicators: [inflation_cpi]
+                  indicators: [PCPIPCH]
                   period:
                     start: "2018"
                     end: "2023"
@@ -235,7 +235,7 @@ paths:
       operationId: listInvestigations
       summary: List saved investigations
       description: >-
-        Lists saved investigations, most recently updated first. Pagination is
+        Lists saved investigations, newest (most recently created) first. Pagination is
         cursor-based: pass `next_cursor` from one page as `cursor` to get the
         next. `next_cursor` is `null` on the last page.
       parameters:
@@ -269,10 +269,11 @@ paths:
                     items:
                       - id: 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f
                         title: Kenya inflation 2022
+                        status: succeeded
                         data_mode: demo
                         investigation_type: anomaly
                         countries: [KEN, NGA]
-                        indicators: [inflation_cpi]
+                        indicators: [PCPIPCH]
                         created_at: "2026-11-07T10:15:00Z"
                         updated_at: "2026-11-07T10:20:00Z"
                     limit: 20
@@ -512,7 +513,7 @@ components:
           question: Why did inflation in Kenya rise in 2022?
           investigation_type: anomaly
           countries: [KEN, NGA]
-          indicators: [inflation_cpi]
+          indicators: [PCPIPCH]
           period:
             start: "2018"
             end: "2023"
@@ -523,10 +524,10 @@ components:
         findings:
           - id: finding-1
             kind: anomaly
-            metric: inflation_cpi
+            metric: PCPIPCH
             statement: Kenya's 2022 inflation of 7.7% is 3.98 standard deviations above its 2018-2021 mean of 5.35%.
             value: 7.7
-            unit: percent
+            unit: "%"
             period:
               start: "2022"
               end: "2022"
@@ -541,8 +542,8 @@ components:
                 baseline_periods: 4
                 threshold: 2
             source:
-              id: mart_inflation
-              name: Consumer price inflation
+              id: fact_macroeconomic_indicators
+              name: IMF DataMapper
               provider: IMF
               url: null
               last_updated: "2026-06-30"
@@ -551,8 +552,8 @@ components:
             result_ids: [anomaly-1, baseline-1]
         series:
           - id: series-1
-            metric: inflation_cpi
-            unit: percent
+            metric: PCPIPCH
+            unit: "%"
             period:
               start: "2018"
               end: "2023"
@@ -565,8 +566,8 @@ components:
               description: Values as published, without transformation.
               parameters: {}
             source:
-              id: mart_inflation
-              name: Consumer price inflation
+              id: fact_macroeconomic_indicators
+              name: IMF DataMapper
               provider: IMF
               url: null
               last_updated: "2026-06-30"
@@ -587,59 +588,84 @@ components:
                 value: null
         comparisons:
           - id: comparison-1
-            metric: inflation_cpi
+            metric: PCPIPCH
             method:
-              name: rank_by_value
-              description: Countries ranked by value for the period, highest first.
+              name: compare_shared_periods
+              description: Values aligned on the periods every country shares, ranked by the value at the latest shared period, highest first.
               parameters: {}
+            shared_periods: ["2018", "2019", "2020", "2021", "2022"]
+            ranking_period: "2022"
+            caveats: []
             entries:
               - value: 18.8
-                unit: percent
+                unit: "%"
                 period:
-                  start: "2022"
+                  start: "2018"
                   end: "2022"
                   frequency: annual
                 geography:
                   country_code: NGA
                   country_name: Nigeria
                 method:
-                  name: rank_by_value
-                  description: Countries ranked by value for the period, highest first.
+                  name: compare_shared_periods
+                  description: Values aligned on the periods every country shares, ranked by the value at the latest shared period, highest first.
                   parameters: {}
                 source:
-                  id: mart_inflation
-                  name: Consumer price inflation
-                  provider: IMF
+                  id: fact_macroeconomic_indicators
+                  name: IMF DataMapper
+                  provider: IMF DataMapper
                   url: null
-                  last_updated: "2026-06-30"
+                  last_updated: "2026-10-29"
                 caveats: []
                 rank: 1
+                status: ranked
+                first_period: "2018"
+                last_period: "2022"
+                observation_count: 5
+                shared_count: 5
+                excluded_periods: []
+                mean: 14.6
+                median: 13.2
+                minimum: 11.4
+                maximum: 18.8
+                standard_deviation: 2.9
               - value: 7.7
-                unit: percent
+                unit: "%"
                 period:
-                  start: "2022"
+                  start: "2018"
                   end: "2022"
                   frequency: annual
                 geography:
                   country_code: KEN
                   country_name: Kenya
                 method:
-                  name: rank_by_value
-                  description: Countries ranked by value for the period, highest first.
+                  name: compare_shared_periods
+                  description: Values aligned on the periods every country shares, ranked by the value at the latest shared period, highest first.
                   parameters: {}
                 source:
-                  id: mart_inflation
-                  name: Consumer price inflation
-                  provider: IMF
+                  id: fact_macroeconomic_indicators
+                  name: IMF DataMapper
+                  provider: IMF DataMapper
                   url: null
-                  last_updated: "2026-06-30"
+                  last_updated: "2026-10-29"
                 caveats: []
                 rank: 2
+                status: ranked
+                first_period: "2018"
+                last_period: "2022"
+                observation_count: 5
+                shared_count: 5
+                excluded_periods: []
+                mean: 5.82
+                median: 5.4
+                minimum: 4.7
+                maximum: 7.7
+                standard_deviation: 1.15
         baselines:
           - id: baseline-1
-            metric: inflation_cpi
+            metric: PCPIPCH
             value: 7.7
-            unit: percent
+            unit: "%"
             period:
               start: "2022"
               end: "2022"
@@ -648,16 +674,16 @@ components:
               country_code: KEN
               country_name: Kenya
             method:
-              name: historical_mean
-              description: Mean of the preceding periods.
+              name: historical_baseline
+              description: Compares the target value with the trailing window before it. Percentile rank is the percent of window values less than or equal to the target.
               parameters:
-                baseline_periods: 4
+                window: 4
             source:
-              id: mart_inflation
-              name: Consumer price inflation
-              provider: IMF
+              id: fact_macroeconomic_indicators
+              name: IMF DataMapper
+              provider: IMF DataMapper
               url: null
-              last_updated: "2026-06-30"
+              last_updated: "2026-10-29"
             caveats: []
             baseline_value: 5.35
             baseline_period:
@@ -666,36 +692,77 @@ components:
               frequency: annual
             difference: 2.35
             percent_difference: 43.93
+            median: 5.3
+            standard_deviation: 0.59
+            z_score: 3.98
+            percentile_rank: 100
+            window_count: 4
+            missing_count: 0
         anomalies:
           - id: anomaly-1
-            metric: inflation_cpi
-            value: 7.7
-            unit: percent
+            metric: PCPIPCH
+            unit: "%"
             period:
-              start: "2022"
+              start: "2018"
               end: "2022"
               frequency: annual
             geography:
               country_code: KEN
               country_name: Kenya
             method:
-              name: z_score
-              description: Distance from the baseline mean in baseline standard deviations.
+              name: rolling_zscore
+              description: Each value is compared with the trailing window before it.
               parameters:
-                baseline_periods: 4
-                threshold: 2
+                window: 4
+                threshold: 3.0
             source:
-              id: mart_inflation
-              name: Consumer price inflation
-              provider: IMF
+              id: fact_macroeconomic_indicators
+              name: IMF DataMapper
+              provider: IMF DataMapper
               url: null
-              last_updated: "2026-06-30"
+              last_updated: "2026-10-29"
             caveats: []
-            is_anomaly: true
-            score: 3.98
-            threshold: 2
-            expected_value: 5.35
-            direction: above
+            scored_count: 1
+            flagged_count: 1
+            points:
+              - value: 7.7
+                unit: "%"
+                period:
+                  start: "2022"
+                  end: "2022"
+                  frequency: annual
+                geography:
+                  country_code: KEN
+                  country_name: Kenya
+                method:
+                  name: rolling_zscore
+                  description: Each value is compared with the trailing window before it.
+                  parameters:
+                    window: 4
+                    threshold: 3.0
+                source:
+                  id: fact_macroeconomic_indicators
+                  name: IMF DataMapper
+                  provider: IMF DataMapper
+                  url: null
+                  last_updated: "2026-10-29"
+                caveats: []
+                status: flagged
+                reason: null
+                is_anomaly: true
+                score: 3.98
+                threshold: 3.0
+                expected_value: 5.35
+                direction: up
+                window:
+                  start: "2018"
+                  end: "2021"
+                  frequency: annual
+                baseline_mean: 5.35
+                baseline_standard_deviation: 0.59
+                q1: null
+                q3: null
+                iqr: null
         interpretation:
           summary: Kenya's inflation rose sharply in 2022, well above its recent baseline, though it stayed far below Nigeria's.
           statements:
@@ -709,8 +776,8 @@ components:
             - Explanations are limited to the indicators in the data source.
           model: gemini
         sources:
-          - id: mart_inflation
-            name: Consumer price inflation
+          - id: fact_macroeconomic_indicators
+            name: IMF DataMapper
             provider: IMF
             url: null
             last_updated: "2026-06-30"
@@ -722,12 +789,13 @@ components:
       value:
         id: 7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f
         title: Kenya inflation 2022
+        status: succeeded
         data_mode: demo
         request:
           question: Why did inflation in Kenya rise in 2022?
           investigation_type: anomaly
           countries: [KEN]
-          indicators: [inflation_cpi]
+          indicators: [PCPIPCH]
           period:
             start: "2018"
             end: "2023"
@@ -741,7 +809,7 @@ components:
             question: Why did inflation in Kenya rise in 2022?
             investigation_type: anomaly
             countries: [KEN]
-            indicators: [inflation_cpi]
+            indicators: [PCPIPCH]
             period:
               start: "2018"
               end: "2023"
@@ -823,9 +891,11 @@ components:
       examples: [KEN]
     IndicatorCode:
       type: string
-      description: Identifier of an indicator, as returned by `listIndicators`.
-      pattern: "^[a-z0-9_]+$"
-      examples: [inflation_cpi]
+      description: >-
+        Source code of an indicator, as returned by `listIndicators`, for
+        example `PCPIPCH` (IMF) or `SL.UEM.TOTL.ZS` (World Bank).
+      pattern: "^[A-Za-z0-9_.]+$"
+      examples: [PCPIPCH, SL.UEM.TOTL.ZS]
     Frequency:
       type: string
       enum: [annual, quarterly, monthly, daily]
@@ -870,8 +940,8 @@ components:
           type: string
         category:
           type: string
-          description: The MVP indicator group this indicator belongs to.
-          enum: [gdp, inflation, exchange_rate, interest_rate, trade]
+          description: The theme of the indicator in `dim_indicator`, in lower case.
+          enum: [gdp, inflation, trade, debt, fiscal, labour, demographics, investment, savings, financial, digital]
         unit:
           type: string
           description: Unit of the values, for example `percent`, `USD millions` or `local currency per USD`.
@@ -1127,26 +1197,74 @@ components:
           items:
             $ref: "#/components/schemas/SeriesPoint"
 
+    Count:
+      type: integer
+      minimum: 0
+    NullablePeriodLabel:
+      oneOf:
+        - $ref: "#/components/schemas/PeriodLabel"
+        - type: "null"
     ComparisonEntry:
       description: >-
-        One country's value in a comparison. `value` is `null` when it is
-        missing, never `0`; `rank` is then `null` too.
+        One country's value in a comparison. `value` is the value at the
+        comparison's `ranking_period`, `null` when missing, never `0`; `rank`
+        is then `null` too. The statistics cover the shared periods; a
+        country with no value in them has `status` `no_data` and no rank.
       allOf:
         - $ref: "#/components/schemas/NumericResult"
         - type: object
-          required: [rank]
+          required:
+            - rank
+            - status
+            - first_period
+            - last_period
+            - observation_count
+            - shared_count
+            - excluded_periods
+            - mean
+            - median
+            - minimum
+            - maximum
+            - standard_deviation
           properties:
             rank:
               type: [integer, "null"]
               minimum: 1
-              description: Position by value, 1 being the highest, or `null` when the value is missing.
+              description: Position by value, 1 being the highest, or `null` when the value is missing. A rank is a position, not a judgement.
+            status:
+              type: string
+              enum: [ranked, unranked, no_data]
+              description: "`unranked` when the country has shared data but no value at the ranking period."
+            first_period:
+              $ref: "#/components/schemas/NullablePeriodLabel"
+            last_period:
+              $ref: "#/components/schemas/NullablePeriodLabel"
+            observation_count:
+              $ref: "#/components/schemas/Count"
+            shared_count:
+              $ref: "#/components/schemas/Count"
+            excluded_periods:
+              type: array
+              description: Periods with a value that were left out because not every country has them.
+              items:
+                $ref: "#/components/schemas/PeriodLabel"
+            mean:
+              type: [number, "null"]
+            median:
+              type: [number, "null"]
+            minimum:
+              type: [number, "null"]
+            maximum:
+              type: [number, "null"]
+            standard_deviation:
+              type: [number, "null"]
     ComparisonResult:
       type: object
       description: >-
-        The same indicator compared across countries. Each entry is a full
-        numeric result with its own value, unit, period, geography, method,
-        source and caveats.
-      required: [id, metric, method, entries]
+        The same indicator compared across countries over the periods they
+        all share. Each entry is a full numeric result with its own value,
+        unit, period, geography, method, source and caveats.
+      required: [id, metric, method, shared_periods, ranking_period, caveats, entries]
       properties:
         id:
           type: string
@@ -1154,6 +1272,14 @@ components:
           $ref: "#/components/schemas/IndicatorCode"
         method:
           $ref: "#/components/schemas/Method"
+        shared_periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeriodLabel"
+        ranking_period:
+          $ref: "#/components/schemas/NullablePeriodLabel"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
         entries:
           type: array
           items:
@@ -1161,13 +1287,26 @@ components:
 
     BaselineResult:
       description: >-
-        A value compared with the indicator's historical baseline. `value` is
-        the observed value for `period`. Any number that cannot be computed
-        because data is missing is `null`, never `0`.
+        A value compared with its own history. `value` is the observed value
+        for `period`; `baseline_value` is the mean of the window in
+        `baseline_period`, which never includes `period`. Any number that
+        cannot be computed is `null`, never `0`.
       allOf:
         - $ref: "#/components/schemas/NumericResult"
         - type: object
-          required: [id, metric, baseline_value, baseline_period, difference, percent_difference]
+          required:
+            - id
+            - metric
+            - baseline_value
+            - baseline_period
+            - difference
+            - percent_difference
+            - median
+            - standard_deviation
+            - z_score
+            - percentile_rank
+            - window_count
+            - missing_count
           properties:
             id:
               type: string
@@ -1175,7 +1314,7 @@ components:
               $ref: "#/components/schemas/IndicatorCode"
             baseline_value:
               type: [number, "null"]
-              description: The baseline, for example the mean over `baseline_period`, or `null` when it cannot be computed.
+              description: The mean over `baseline_period`, or `null` when it cannot be computed.
             baseline_period:
               $ref: "#/components/schemas/Period"
             difference:
@@ -1184,37 +1323,113 @@ components:
             percent_difference:
               type: [number, "null"]
               description: The difference as a percentage of `baseline_value`, or `null` when it cannot be computed.
+            median:
+              type: [number, "null"]
+            standard_deviation:
+              type: [number, "null"]
+            z_score:
+              type: [number, "null"]
+            percentile_rank:
+              type: [number, "null"]
+              description: Percent of window values less than or equal to `value`.
+            window_count:
+              $ref: "#/components/schemas/Count"
+            missing_count:
+              $ref: "#/components/schemas/Count"
 
-    AnomalyResult:
+    AnomalyPoint:
       description: >-
-        The result of an anomaly test on one value. `value` is the tested
-        value. Any number that cannot be computed because data is missing is
-        `null`, never `0`.
+        The anomaly test on one value. `status` is `not_scored` when the test
+        could not run, and `reason` says why. The window is trailing: a value
+        is judged only against earlier values.
       allOf:
         - $ref: "#/components/schemas/NumericResult"
         - type: object
-          required: [id, metric, is_anomaly, score, threshold, expected_value, direction]
+          required:
+            - status
+            - reason
+            - is_anomaly
+            - score
+            - threshold
+            - expected_value
+            - direction
+            - window
+            - baseline_mean
+            - baseline_standard_deviation
+            - q1
+            - q3
+            - iqr
           properties:
-            id:
+            status:
               type: string
-            metric:
-              $ref: "#/components/schemas/IndicatorCode"
+              enum: [flagged, normal, not_scored]
+            reason:
+              type: [string, "null"]
+              description: Why the point was not scored, or `null`.
             is_anomaly:
               type: [boolean, "null"]
-              description: Whether `score` crosses `threshold`, or `null` when the test could not run.
+              description: Whether the value was flagged, or `null` when it was not scored.
             score:
               type: [number, "null"]
-              description: The test statistic, for example a z-score, or `null` when it cannot be computed.
+              description: The z-score, or the distance beyond the nearest IQR fence, or `null` when not scored.
             threshold:
               type: number
-              description: The value `score` is compared with.
+              description: The z-score threshold or the IQR multiplier.
             expected_value:
               type: [number, "null"]
-              description: The value the method expected, or `null` when it cannot be computed.
+              description: The window mean (z-score) or median (IQR), or `null` when not computed.
             direction:
               type: [string, "null"]
-              enum: [above, below, null]
-              description: Whether the value is above or below `expected_value`, or `null` when not an anomaly or not computed.
+              enum: [up, down, null]
+              description: Whether a flagged value is above (`up`) or below (`down`) its baseline; `null` otherwise.
+            window:
+              description: The trailing window, or `null` when there is none.
+              oneOf:
+                - $ref: "#/components/schemas/Period"
+                - type: "null"
+            baseline_mean:
+              type: [number, "null"]
+            baseline_standard_deviation:
+              type: [number, "null"]
+            q1:
+              type: [number, "null"]
+            q3:
+              type: [number, "null"]
+            iqr:
+              type: [number, "null"]
+    AnomalyResult:
+      type: object
+      description: >-
+        An anomaly test over every value of one series. `scored_count` tells
+        "no anomalies" (scored, none flagged) apart from "could not check"
+        (nothing scored).
+      required: [id, metric, unit, period, geography, method, source, caveats, scored_count, flagged_count, points]
+      properties:
+        id:
+          type: string
+        metric:
+          $ref: "#/components/schemas/IndicatorCode"
+        unit:
+          type: string
+          minLength: 1
+        period:
+          $ref: "#/components/schemas/Period"
+        geography:
+          $ref: "#/components/schemas/Geography"
+        method:
+          $ref: "#/components/schemas/Method"
+        source:
+          $ref: "#/components/schemas/Source"
+        caveats:
+          $ref: "#/components/schemas/Caveats"
+        scored_count:
+          $ref: "#/components/schemas/Count"
+        flagged_count:
+          $ref: "#/components/schemas/Count"
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnomalyPoint"
 
     InterpretationStatement:
       type: object
@@ -1341,7 +1556,10 @@ components:
           items:
             $ref: "#/components/schemas/AnomalyResult"
         interpretation:
-          $ref: "#/components/schemas/Interpretation"
+          description: Gemini's interpretation, or `null` when the results have not been interpreted yet.
+          oneOf:
+            - $ref: "#/components/schemas/Interpretation"
+            - type: "null"
         sources:
           type: array
           description: Every source used by the results.
@@ -1353,10 +1571,19 @@ components:
           type: string
           format: date-time
 
+    InvestigationStatus:
+      type: string
+      enum: [pending, running, succeeded, failed]
+      description: >-
+        Where the investigation is in its run. It moves from `pending` to
+        `running`, then to `succeeded` or `failed` (or straight to `failed`);
+        any other change is rejected.
     InvestigationCreate:
       type: object
       required: [title, request, result]
       properties:
+        status:
+          $ref: "#/components/schemas/InvestigationStatus"
         title:
           type: string
           minLength: 1
@@ -1370,6 +1597,8 @@ components:
       description: Fields to change. At least one is required; fields left out keep their values.
       minProperties: 1
       properties:
+        status:
+          $ref: "#/components/schemas/InvestigationStatus"
         title:
           type: string
           minLength: 1
@@ -1381,13 +1610,15 @@ components:
     Investigation:
       type: object
       description: A saved investigation. `data_mode` is the mode its result was computed in.
-      required: [id, title, data_mode, request, result, created_at, updated_at]
+      required: [id, title, status, data_mode, request, result, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
         title:
           type: string
+        status:
+          $ref: "#/components/schemas/InvestigationStatus"
         data_mode:
           $ref: "#/components/schemas/DataMode"
         request:
@@ -1403,13 +1634,15 @@ components:
     InvestigationSummary:
       type: object
       description: A saved investigation without its result, for lists.
-      required: [id, title, data_mode, investigation_type, countries, indicators, created_at, updated_at]
+      required: [id, title, status, data_mode, investigation_type, countries, indicators, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
         title:
           type: string
+        status:
+          $ref: "#/components/schemas/InvestigationStatus"
         data_mode:
           $ref: "#/components/schemas/DataMode"
         investigation_type:

@@ -72,7 +72,9 @@ class InvestigationRecord(Base):
     """One investigation: what was asked, how it ran and what it found.
 
     ``question`` is ``None`` when the investigation starts from selections
-    alone. The JSONB columns hold the JSON form of the result models in
+    alone. ``request`` and ``result`` hold the contract's
+    ``InvestigationRequest`` and ``InvestigationResult``; ``findings``,
+    ``sources`` and ``chart_config`` repeat parts of them for querying. The JSONB columns hold the JSON form of the result models in
     :mod:`copilot_core.models`. ``updated_at`` is set by a database trigger
     on every update, whichever client makes it.
     """
@@ -90,6 +92,9 @@ class InvestigationRecord(Base):
         server_default=func.gen_random_uuid(),
     )
     question: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text, server_default="")
+    request: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     selections: Mapped[dict[str, Any]] = mapped_column(JSONB)
     parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     findings: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
