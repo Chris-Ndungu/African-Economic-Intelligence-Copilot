@@ -39,7 +39,7 @@ def test_workspace_renders_the_panel_in_the_selection_aside():
     page = Page(make_client().get("/").text)
 
     aside = page.find("aside", aria_label="Selection")
-    form = page.find("form")
+    form = page.find("form", id="selection-form")
     assert "Indicator" in text(aside)
     assert form.attrs["hx-post"] == "/partials/selection"
     assert form.attrs["hx-trigger"] == "change"

@@ -6,11 +6,13 @@
   <title>{% block title %}{{ request.app.state.settings.app_name }}{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/{{ htmx_file }}" defer></script>
+  <script src="/static/{{ sse_file }}" defer></script>
   <script src="/static/{{ plotly_file }}" defer></script>
   <script src="/static/charts.js" defer></script>
   <script src="/static/table-sort.js" defer></script>
   <script src="/static/local-time.js" defer></script>
   <script src="/static/history.js" defer></script>
+  <script src="/static/run.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>

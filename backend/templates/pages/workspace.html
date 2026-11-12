@@ -4,6 +4,7 @@
 
 {% block content %}
 <aside class="sidebar" aria-label="Selection">
+  {% include "partials/run_form.html" %}
   {% include "partials/selection.html" %}
   <div id="selection-error" class="panel-error" role="alert" hidden>
     <p class="message">The selection could not be updated. Your previous selection is unchanged.</p>
