@@ -66,14 +66,21 @@ def _healthy(url: str) -> bool:
 
 
 @pytest.fixture(scope="session")
-def base_url():
-    """The URL of the app under test: ``E2E_BASE_URL`` or the stack started here."""
+def base_url(request):
+    """The URL of the app under test: ``E2E_BASE_URL`` or the stack started here.
+
+    The stack is built and started only when the e2e tests are selected with ``-m e2e``, so a
+    plain ``uv run pytest`` never spends minutes building an image.
+    """
     given = os.environ.get("E2E_BASE_URL", "").strip().rstrip("/")
     if given:
         if not _healthy(given):
             pytest.skip(f"E2E_BASE_URL={given} did not answer /health. {HOW_TO_RUN}")
         yield given
         return
+    selected = str(request.config.getoption("-m") or "")
+    if "e2e" not in selected or "not e2e" in selected:
+        pytest.skip(f"The end-to-end tests run only with -m e2e or E2E_BASE_URL. {HOW_TO_RUN}")
     if not _docker_available():
         pytest.skip(HOW_TO_RUN)
     up = subprocess.run(
