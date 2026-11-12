@@ -2,9 +2,34 @@
 
 {% block content %}
 <aside class="sidebar" aria-label="Selection">
-  <p class="placeholder">Countries, indicators and periods will be chosen here.</p>
+  {% if data_available %}
+  <form class="selection" hx-get="/partials/trend" hx-target="#results" hx-swap="innerHTML">
+    <label for="country">Country</label>
+    <select id="country" name="country" required>
+      {% for country in countries %}
+      <option value="{{ country.code }}"{% if country.code == "KEN" %} selected{% endif %}>{{ country.name }}</option>
+      {% endfor %}
+    </select>
+    <label for="indicator">Indicator</label>
+    <select id="indicator" name="indicator" required>
+      {% for indicator in indicators %}
+      <option value="{{ indicator.code }}">{{ indicator.name }} ({{ indicator.unit }})</option>
+      {% endfor %}
+    </select>
+    <label for="start">From</label>
+    <input id="start" name="start" value="2000" inputmode="numeric" pattern="[0-9]{4}" required>
+    <label for="end">To</label>
+    <input id="end" name="end" value="2025" inputmode="numeric" pattern="[0-9]{4}" required>
+    <button class="button" type="submit">Show trend</button>
+  </form>
+  {% else %}
+  <p class="placeholder">The data files cannot be read, so no data can be shown.</p>
+  {% endif %}
 </aside>
 <main class="workspace" aria-label="Workspace">
-  <p class="placeholder">Ask a question or pick a selection to start an investigation.</p>
+  <p class="demo-label">Demo mode: sample data snapshot, not live data.</p>
+  <div id="results" aria-live="polite">
+    <p class="placeholder">Ask a question or pick a selection to start an investigation.</p>
+  </div>
 </main>
 {% endblock %}

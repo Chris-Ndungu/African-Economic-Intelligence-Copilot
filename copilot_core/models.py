@@ -38,7 +38,9 @@ from pydantic import (
 from pydantic.types import AllowInfNan
 
 __all__ = [
+    "AnomalyPoint",
     "AnomalyResult",
+    "AnomalyStatus",
     "BaselineResult",
     "ComparisonEntry",
     "ComparisonResult",
@@ -71,8 +73,8 @@ NonEmptyStr = Annotated[str, StringConstraints(min_length=1), AfterValidator(_no
 CountryCode = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
 """ISO 3166-1 alpha-3 country code, for example ``KEN``."""
 
-IndicatorCode = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+$")]
-"""Identifier of an indicator, for example ``inflation_cpi``."""
+IndicatorCode = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.]+$")]
+"""Source code of an indicator, for example ``PCPIPCH`` (IMF) or ``SL.UEM.TOTL.ZS``."""
 
 Frequency = Literal["annual", "quarterly", "monthly", "daily"]
 
@@ -322,37 +324,88 @@ class SeriesResult(_Model):
         return self
 
 
+Count = Annotated[int, Strict(), Field(ge=0)]
+
+
 class ComparisonEntry(NumericResult):
-    """One country's value in a comparison."""
+    """One country's value in a comparison.
+
+    ``value`` is the country's value at the comparison's ``ranking_period``.
+    The summary statistics cover the periods all countries share; periods
+    of this country outside them are listed in ``excluded_periods``. A
+    country with no value in the shared periods has ``status`` ``no_data``,
+    no rank and no statistics.
+    """
+
+    _nullable_numbers: ClassVar[tuple[str, ...]] = (
+        "value",
+        "mean",
+        "median",
+        "minimum",
+        "maximum",
+        "standard_deviation",
+    )
 
     rank: Annotated[int, Strict(), Field(ge=1)] | None = Field(
         description="Position by value, 1 being the highest, or `null` when the value is missing."
     )
+    status: Literal["ranked", "unranked", "no_data"] = Field(
+        description="`unranked` when the country has shared data but no value at the ranking period."
+    )
+    first_period: PeriodLabel | None = Field(description="First period with a value, or `null`.")
+    last_period: PeriodLabel | None = Field(description="Last period with a value, or `null`.")
+    observation_count: Count = Field(description="Periods with a value in the input series.")
+    shared_count: Count = Field(description="Shared periods with a value for this country.")
+    excluded_periods: tuple[PeriodLabel, ...] = Field(
+        description="Periods with a value that were left out because not every country has them."
+    )
+    mean: Number | None
+    median: Number | None
+    minimum: Number | None
+    maximum: Number | None
+    standard_deviation: Number | None
 
     @model_validator(mode="after")
     def _rank_needs_value(self) -> ComparisonEntry:
         if self.value is None and self.rank is not None:
             raise ValueError("rank must be null when value is missing")
+        if (self.status == "ranked") != (self.rank is not None):
+            raise ValueError("only a ranked entry has a rank")
         return self
 
 
 class ComparisonResult(_Model):
-    """The same indicator compared across countries."""
+    """The same indicator compared across countries over their shared periods."""
 
     id: NonEmptyStr
     metric: IndicatorCode
     method: Method
+    shared_periods: tuple[PeriodLabel, ...] = Field(
+        description="Periods in which every country has a value."
+    )
+    ranking_period: PeriodLabel | None = Field(
+        description="The latest shared period, used for ranking, or `null` when none is shared."
+    )
+    caveats: Caveats
     entries: tuple[ComparisonEntry, ...]
 
 
 class BaselineResult(NumericResult):
-    """A value compared with the indicator's historical baseline."""
+    """A value compared with the indicator's historical baseline.
+
+    ``baseline_value`` is the mean of the window in ``baseline_period``,
+    which never includes ``period`` itself.
+    """
 
     _nullable_numbers: ClassVar[tuple[str, ...]] = (
         "value",
         "baseline_value",
         "difference",
         "percent_difference",
+        "median",
+        "standard_deviation",
+        "z_score",
+        "percentile_rank",
     )
 
     id: NonEmptyStr
@@ -361,21 +414,84 @@ class BaselineResult(NumericResult):
     baseline_period: Period
     difference: Number | None
     percent_difference: Number | None
-
-
-class AnomalyResult(NumericResult):
-    """The result of an anomaly test on one value."""
-
-    _nullable_numbers: ClassVar[tuple[str, ...]] = (
-        "value",
-        "score",
-        "expected_value",
+    median: Number | None
+    standard_deviation: Number | None
+    z_score: Number | None
+    percentile_rank: Number | None = Field(
+        description="Percent of window values less than or equal to `value`."
     )
+    window_count: Count = Field(description="Values in the window used for the statistics.")
+    missing_count: Count = Field(description="Periods in the window with no value.")
+
+
+AnomalyStatus = Literal["flagged", "normal", "not_scored"]
+
+
+class AnomalyPoint(NumericResult):
+    """The anomaly test on one value of a series.
+
+    ``status`` is ``not_scored`` when the test could not run, and ``reason``
+    then says why. The baseline fields hold the trailing window's mean and
+    standard deviation (rolling z-score) or Q1, Q3 and IQR (IQR method).
+    """
+
+    _nullable_numbers: ClassVar[tuple[str, ...]] = ("value",)
+
+    status: AnomalyStatus
+    reason: NonEmptyStr | None = Field(description="Why the point was not scored, or `null`.")
+    is_anomaly: bool | None = Field(description="`null` when the point was not scored.")
+    score: Number | None = Field(
+        description="The z-score, or the distance beyond the nearest IQR fence."
+    )
+    threshold: Number
+    expected_value: Number | None = Field(description="Window mean or median.")
+    direction: Literal["up", "down"] | None = Field(
+        description="Whether a flagged value is above (`up`) or below (`down`) its baseline."
+    )
+    window: Period | None = Field(description="The trailing window, or `null` if none exists.")
+    baseline_mean: Number | None
+    baseline_standard_deviation: Number | None
+    q1: Number | None
+    q3: Number | None
+    iqr: Number | None
+
+    @model_validator(mode="after")
+    def _status_consistent(self) -> AnomalyPoint:
+        if self.status == "not_scored":
+            if self.reason is None:
+                raise ValueError("a point that was not scored needs a reason")
+            if self.is_anomaly is not None or self.score is not None:
+                raise ValueError("a point that was not scored has no score")
+        else:
+            if self.score is None or self.is_anomaly != (self.status == "flagged"):
+                raise ValueError("a scored point needs a score and a matching is_anomaly")
+        if self.direction is not None and self.status != "flagged":
+            raise ValueError("only a flagged point has a direction")
+        return self
+
+
+class AnomalyResult(_Model):
+    """An anomaly test over every value of one series.
+
+    ``scored_count`` tells "no anomalies" apart from "could not check".
+    """
 
     id: NonEmptyStr
     metric: IndicatorCode
-    is_anomaly: bool | None
-    score: Number | None
-    threshold: Number
-    expected_value: Number | None
-    direction: Literal["above", "below"] | None
+    unit: NonEmptyStr
+    period: Period
+    geography: Geography
+    method: Method
+    source: SourceRef
+    caveats: Caveats
+    scored_count: Count
+    flagged_count: Count
+    points: tuple[AnomalyPoint, ...]
+
+    @model_validator(mode="after")
+    def _counts_consistent(self) -> AnomalyResult:
+        scored = sum(p.status != "not_scored" for p in self.points)
+        flagged = sum(p.status == "flagged" for p in self.points)
+        if (scored, flagged) != (self.scored_count, self.flagged_count):
+            raise ValueError("scored_count and flagged_count must match the points")
+        return self

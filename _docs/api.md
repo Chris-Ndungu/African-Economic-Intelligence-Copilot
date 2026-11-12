@@ -108,7 +108,29 @@ handlers that return `Error`.
 
 ### Pagination
 
-`GET /api/investigations` is cursor-paginated, most recently updated first.
+`GET /api/investigations` is cursor-paginated, newest (most recently created) first.
 `limit` defaults to 20 and is at most 100. Pass the response's
 `next_cursor` as `cursor` to get the next page; it is `null` on the last
 page.
+
+### Conformance
+
+`tests/test_contract.py` compares the schema the FastAPI app generates with
+`api/openapi.yaml`: every path and method, parameters, request bodies and
+response schemas. It fails, naming the endpoint or field, when they
+disagree. Its docstring lists the differences it ignores (descriptions,
+ordering, schema names, FastAPI's default `422` when the contract has none).
+Operations not implemented yet, `runInvestigation` (#28) and
+`exportInvestigationPdf` (#32), are listed in the test and must be removed
+from that list when they are added.
+
+Phase 3 changed the contract before the code:
+
+- Indicator codes are the source codes, for example `PCPIPCH` or
+  `SL.UEM.TOTL.ZS`, and categories are the `dim_indicator` themes.
+- `ComparisonResult`, `BaselineResult` and the new `AnomalyPoint` carry the
+  statistics the analysis functions compute; `AnomalyResult` covers a whole
+  series, with `scored_count` and `flagged_count`.
+- `InvestigationResult.interpretation` is `null` until Gemini interprets the
+  results (Phase 4).
+- Saved investigations have a `status`.

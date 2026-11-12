@@ -111,10 +111,12 @@ def test_workspace_has_header_sidebar_and_main(client):
     assert "New investigation" in text(header)
 
     sidebar = page.find("aside", aria_label="Selection")
-    assert text(sidebar) == "Countries, indicators and periods will be chosen here."
+    for label in ("Country", "Indicator", "From", "To", "Show trend"):
+        assert label in text(sidebar)
 
     main = page.find("main", aria_label="Workspace")
-    assert text(main) == "Ask a question or pick a selection to start an investigation."
+    assert "Demo mode: sample data snapshot, not live data." in text(main)
+    assert "Ask a question or pick a selection to start an investigation." in text(main)
 
 
 def test_workspace_loads_vendored_htmx(client):

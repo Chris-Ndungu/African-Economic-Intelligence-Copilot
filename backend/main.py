@@ -11,8 +11,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from backend import web
+from backend import api, errors, web
 from backend.settings import Settings
+from copilot_core.schemas import Health
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -22,11 +23,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name)
     app.state.settings = settings
 
-    @app.get("/health", tags=["health"])
-    def health() -> dict[str, str]:
-        """Liveness check. Does not touch Postgres, Gemini or BigQuery."""
-        return {"status": "ok"}
+    errors.install(app)
 
+    @app.get("/health", tags=["health"], operation_id="getHealth")
+    def health() -> Health:
+        """Liveness check. Does not touch Postgres, Gemini or BigQuery."""
+        return Health(status="ok")
+
+    app.include_router(api.router)
     app.include_router(web.router)
     app.mount("/static", StaticFiles(directory=web.STATIC_DIR), name="static")
 
