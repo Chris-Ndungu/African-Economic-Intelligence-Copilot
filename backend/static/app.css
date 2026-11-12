@@ -248,3 +248,9 @@ body {
 .mode-live { background: var(--color-accent); color: var(--color-accent-text); }
 .mode-unknown { background: var(--color-text); color: var(--color-background); }
 .run-form .message { margin: 0.25rem 0; }
+
+.export { margin-top: 0.75rem; }
+.export-pdf.is-loading { opacity: 0.6; cursor: progress; }
+.export-pdf[aria-disabled="true"] { pointer-events: none; }
+.export-error { margin: 0.5rem 0 0; }
+.export-error[hidden] { display: none; }

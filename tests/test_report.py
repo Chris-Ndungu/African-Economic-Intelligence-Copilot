@@ -10,6 +10,7 @@ import os
 import re
 import uuid
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -353,3 +354,182 @@ def test_a_file_url_in_the_question_never_puts_that_file_in_the_pdf(tmp_path):
 
     assert "TOP-SECRET-CONTENT" not in text
     assert "<script>" in text  # printed as literal text
+
+
+# --- Charts (#33) ------------------------------------------------------------------------
+
+
+def two_chart_investigation():
+    from copilot_core.schemas import ChartSpec
+
+    investigation = full()
+    result = investigation.result
+    second = ChartSpec(
+        id="c2",
+        kind="line",
+        title="Inflation again",
+        result_id="r1",
+        unit="%",
+        series_ids=[result.series[0].id],
+    )
+    result = result.model_copy(update={"charts": [*result.charts, second]})
+    return investigation.model_copy(update={"result": result})
+
+
+PNG = b"\x89PNG\r\n\x1a\n-fake"
+
+
+def chart_html(investigation, render):
+    return render_report_html(
+        investigation, snapshot_date=SNAPSHOT, generated_at=GENERATED, render_chart=render
+    )
+
+
+def test_each_chart_spec_is_drawn_once_next_to_the_finding_that_cites_it():
+    investigation = two_chart_investigation()
+    markup = chart_html(investigation, lambda figure: PNG)
+
+    assert markup.count("<img") == len(investigation.result.charts) == 2
+    assert "data:image/png;base64," in markup
+    # both charts cite r1, as does the finding, so they print inside its card
+    card = markup[markup.index("<article") : markup.index("</article>")]
+    assert card.count("<img") == 2 and "Inflation rose." in card
+
+
+def test_the_figure_sent_to_kaleido_is_the_one_the_results_view_embeds():
+    import json
+
+    investigation = two_chart_investigation()
+    sent = []
+
+    def capture(figure):
+        sent.append(figure)
+        return PNG
+
+    chart_html(investigation, capture)
+    page = templates.env.get_template("partials/results.html").render(investigation=investigation)
+    embedded = [
+        json.loads(m.replace("&#34;", '"'))
+        for m in re.findall(
+            r'<script type="application/json" class="chart-data">(.*?)</script>', page
+        )
+    ]
+
+    assert len(sent) == len(embedded) == 2
+    for figure, shown in zip(sent, embedded, strict=True):
+        assert figure == shown
+
+
+def test_a_chart_that_fails_is_replaced_by_a_message_and_logged_with_the_investigation_id(caplog):
+    investigation = two_chart_investigation()
+    calls = []
+
+    def flaky(figure):
+        calls.append(figure)
+        if len(calls) == 1:
+            raise RuntimeError("no browser")
+        return PNG
+
+    with caplog.at_level("ERROR", logger="copilot_core.report"):
+        markup = chart_html(investigation, flaky)
+
+    assert "Chart could not be rendered" in markup
+    assert markup.count("<img") == 1  # the other chart is still drawn
+    assert str(investigation.id) in caplog.text
+
+
+def test_charts_are_distinguishable_without_colour():
+    from copilot_core.figures import line_figure
+
+    series = [make_series([1.0, 2.0], country="KEN"), make_series([2.0, 3.0], country="NGA")]
+    traces = line_figure(series, "t")["data"]
+
+    assert len({t["line"]["dash"] for t in traces}) == 2
+    assert len({t["marker"]["symbol"] for t in traces}) == 2
+    assert all(t["connectgaps"] is False for t in traces)
+
+
+def kaleido_error():
+    try:
+        from copilot_core.report import render_chart_image
+
+        assert render_chart_image({"data": [{"type": "scatter", "x": [1], "y": [1]}]})[:4]
+    except Exception as exc:
+        return str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+    return ""
+
+
+needs_kaleido = pytest.mark.skipif(
+    bool(kaleido_error()),
+    reason=(
+        "Kaleido could not start Chrome or Chromium. Install one, or run "
+        "`uv run kaleido_get_chrome`, as described under 'PDF reports' in "
+        "_docs/AGENTS.md, then run: uv run pytest tests/test_report.py"
+    ),
+)
+
+
+@needs_kaleido
+def test_kaleido_draws_the_real_figure_to_a_png():
+    from copilot_core.figures import build_chart
+    from copilot_core.report import render_chart_image
+
+    investigation = two_chart_investigation()
+    spec = investigation.result.charts[0]
+    figure = build_chart(spec, investigation.result.tool_results).figure
+
+    assert render_chart_image(figure).startswith(b"\x89PNG")
+
+
+@needs_weasyprint
+@needs_kaleido
+def test_the_pdf_contains_one_image_per_chart_spec():
+    from pypdf import PdfReader
+
+    investigation = two_chart_investigation()
+    pdf = render_report_pdf(investigation, snapshot_date=SNAPSHOT, generated_at=GENERATED)
+    images = [image for page in PdfReader(io.BytesIO(pdf)).pages for image in page.images]
+
+    assert len(images) == len(investigation.result.charts)
+
+
+# --- The export button -------------------------------------------------------------------
+
+
+def results_html(investigation):
+    return templates.env.get_template("partials/results.html").render(investigation=investigation)
+
+
+@pytest.mark.parametrize("status", ["pending", "running", "failed"])
+def test_the_export_button_is_absent_unless_the_investigation_succeeded(status):
+    investigation = make_investigation(
+        None, status=status, error=failed() if status == "failed" else None
+    )
+
+    assert "Export PDF" not in results_html(investigation)
+
+
+def test_a_succeeded_investigation_has_a_plain_link_to_the_export_endpoint():
+    investigation = full()
+    markup = results_html(investigation)
+
+    link = re.search(
+        r'<a class="button secondary export-pdf" href="([^"]+)">Export PDF</a>', markup
+    )
+    assert link and link.group(1) == f"/api/investigations/{investigation.id}/report"
+    assert 'class="message error export-error" role="alert" hidden' in markup
+
+
+def test_the_page_loads_the_export_script_and_the_error_messages_it_shows():
+    from backend.web import templates as web_templates
+
+    page = client_for(full()).get("/")
+    assert "/static/export.js" in page.text
+    for code in ("not_found", "conflict", "service_unavailable", "internal_error"):
+        assert code in web_templates.env.globals["error_messages"]
+    script = (Path(__file__).resolve().parent.parent / "backend/static/export.js").read_text(
+        "utf-8"
+    )
+    assert (
+        "Content-Disposition" in script and "aria-disabled" in script and "error-messages" in script
+    )

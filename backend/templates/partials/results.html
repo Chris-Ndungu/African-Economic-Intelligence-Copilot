@@ -18,6 +18,12 @@
       <button class="button" type="submit">Start from these selections</button>
     </form>
     {% endif %}
+    {% if view.status == "succeeded" %}
+    <div class="export">
+      <a class="button secondary export-pdf" href="/api/investigations/{{ view.investigation_id }}/report">Export PDF</a>
+      <p class="message error export-error" role="alert" hidden></p>
+    </div>
+    {% endif %}
   </header>
 {% if view.error %}
   <p class="message error" role="alert">{{ view.error }}</p>

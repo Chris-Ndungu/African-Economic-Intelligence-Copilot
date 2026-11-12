@@ -242,7 +242,6 @@ def export_investigation_pdf(
     pdf = render_report_pdf(
         investigation,
         snapshot_date=get_app_meta(request).snapshot_date,
-        charts=False,  # Charts arrive with #33.
     )
     return PdfResponse(
         pdf,
