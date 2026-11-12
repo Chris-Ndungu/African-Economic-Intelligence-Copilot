@@ -67,9 +67,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("data_mode", sa.Text(), nullable=False),
-        sa.Column(
-            "status", sa.Text(), server_default=sa.text("'pending'"), nullable=False
-        ),
+        sa.Column("status", sa.Text(), server_default=sa.text("'pending'"), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column(
             "created_at",

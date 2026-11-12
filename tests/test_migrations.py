@@ -116,7 +116,11 @@ def new_record(**overrides):
         },
         "parameters": {"baseline_periods": 4, "anomaly_method": "z_score", "anomaly_threshold": 2},
         "findings": [finding_json()],
-        "chart_config": {"type": "line", "series": ["inflation_cpi:KEN"], "options": {"log": False}},
+        "chart_config": {
+            "type": "line",
+            "series": ["inflation_cpi:KEN"],
+            "options": {"log": False},
+        },
         "sources": [finding_json()["source"]],
         "data_mode": "demo",
         "status": "succeeded",
@@ -132,7 +136,14 @@ def test_upgrade_insert_read_back_and_downgrade(empty_database):
         record = new_record()
         expected = {
             column: getattr(record, column)
-            for column in ("question", "selections", "parameters", "findings", "chart_config", "sources")
+            for column in (
+                "question",
+                "selections",
+                "parameters",
+                "findings",
+                "chart_config",
+                "sources",
+            )
         }
         with Session(engine) as session:
             session.add(record)
@@ -143,7 +154,9 @@ def test_upgrade_insert_read_back_and_downgrade(empty_database):
             stored = session.get(InvestigationRecord, record_id)
             for column, value in expected.items():
                 assert getattr(stored, column) == value, column
-            assert Finding.model_validate(stored.findings[0]).model_dump(mode="json") == finding_json()
+            assert (
+                Finding.model_validate(stored.findings[0]).model_dump(mode="json") == finding_json()
+            )
             assert stored.status == "succeeded"
             assert stored.error is None
     finally:
@@ -206,7 +219,9 @@ def test_timestamps_are_utc_and_updated_at_changes_on_every_update(migrated):
             session.commit()
             updated.append(
                 session.scalar(
-                    select(InvestigationRecord.updated_at).where(InvestigationRecord.id == record.id)
+                    select(InvestigationRecord.updated_at).where(
+                        InvestigationRecord.id == record.id
+                    )
                 )
             )
 
@@ -265,11 +280,15 @@ def test_database_rejects_invalid_data_mode_and_status(migrated, column, row):
 def test_newest_first_listing_uses_the_index(migrated):
     with migrated.begin() as connection:
         for _ in range(3):
-            connection.execute(text("INSERT INTO investigations (selections, data_mode) VALUES ('{}', 'demo')"))
+            connection.execute(
+                text("INSERT INTO investigations (selections, data_mode) VALUES ('{}', 'demo')")
+            )
         connection.execute(text("SET LOCAL enable_seqscan = off"))
         plan = "\n".join(
             connection.execute(
-                text("EXPLAIN SELECT id FROM investigations ORDER BY created_at DESC, id DESC LIMIT 20")
+                text(
+                    "EXPLAIN SELECT id FROM investigations ORDER BY created_at DESC, id DESC LIMIT 20"
+                )
             ).scalars()
         )
 

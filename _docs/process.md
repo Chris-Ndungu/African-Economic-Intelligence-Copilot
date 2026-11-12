@@ -1,5 +1,7 @@
-- Tasks are GitHub issues, one at a time, or a small batch of related issues
-  that change the same files
+- Tasks are GitHub issues, worked one at a time
+- Issues are grouped into the phases in
+  [plan.md section 7](plan.md#7-implementation-sequence); each phase is one branch and
+  one PR
 - Read the acceptance criteria before starting and before closing
 - Commit regularly
 
@@ -59,15 +61,22 @@ Branch, PR and merge
 
 1. The PM grooms the issue so it follows `_docs/task-template.md`, or it
    already does
-2. Create a branch from an up-to-date `main`, named `<issue number>-<short-description>`,
-   for example `4-project-skills`. A batch uses the first issue's number
-3. Commit on that branch, regularly, with clear messages, one commit per
-   issue in a batch
-4. Open a PR into `main` that links each issue with a `Closes #<issue number>` line
-5. Review the PR: QA checks every acceptance criterion in the issue
+2. Each phase gets one branch, created from an up-to-date `main` when its
+   first issue starts, named `phase-<number>-<short-description>`, for
+   example `phase-2-walking-skeleton`. Issues do not get their own branches
+3. Commit on that branch, regularly, with clear messages. Each issue ends
+   in at least one commit whose message has a `Refs #<issue number>` line
+4. When every issue in the phase has passed QA, open one PR into `main`
+   that links each issue with a `Closes #<issue number>` line
+5. Review the PR: QA checks every acceptance criterion in each issue
 6. A human merges the PR, only after every acceptance criterion is checked.
    Agents never merge
-7. The issue closes when the PR that closes it is merged
+7. The issues close when the PR that closes them is merged
+
+`main` is protected by a GitHub ruleset: changes land only through a pull
+request, the CI check "Lint, type check and test" must pass before merging,
+and force-pushes and deleting `main` are blocked. No second reviewer is
+required, so the owner can merge a passing PR.
 
 Tracker
 

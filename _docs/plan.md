@@ -484,18 +484,21 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 
 - Write the OpenAPI contract for investigations, analyses, history, and reports.
 - Scaffold the FastAPI app with the Jinja and HTMX workspace shell, `copilot_core`, Postgres with Alembic, and Docker Compose.
-- Wire one thin end-to-end path: select country and indicator → trend result → chart → saved investigation.
-- Add CI (tests on PR) and deploy to dev on Cloud Run.
+- Add CI (lint, type checks and tests on every PR) and protect `main` so changes land only through passing PRs.
 
-**Deliverable:** A deployed skeleton that runs with one command locally and has CI.
+**Deliverable:** A skeleton that runs with one command locally, with CI on every PR.
+
+The first end-to-end path and the contract-conformance test move to Phase 3, where the data service and analysis they need are built; the dev deployment moves to Phase 6, after the production image, which needs PDF export from Phase 5.
 
 ### Phase 3 — Analytical foundation
 
 - Implement the DuckDB data service and filters.
 - Implement and test trend, growth, comparison, and anomaly functions (correlation and lag in Tier 2).
 - Define standard result objects with values, units, period, methodology, and source metadata.
+- Wire one thin end-to-end path: select country and indicator → trend result → chart → saved investigation.
+- Test that the FastAPI app matches the OpenAPI contract.
 
-**Deliverable:** Tested analytical functions that work independently of the AI.
+**Deliverable:** Tested analytical functions that work independently of the AI, reachable through one end-to-end path.
 
 ### Phase 4 — Gemini orchestration
 
@@ -520,6 +523,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 
 - Add OpenTelemetry instrumentation, structured logs, and metrics for the key journey.
 - Add Grafana dashboards and the user-impact alert.
+- Build the production image and deploy to dev on Cloud Run, then automatically on merge.
 - Add the manually approved prod deployment.
 - Implement the on-call agent and demonstrate it on a staged failure.
 

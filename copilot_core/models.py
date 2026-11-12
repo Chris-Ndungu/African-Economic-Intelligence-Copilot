@@ -103,9 +103,7 @@ def _real_calendar_date(label: str) -> str:
 
 PeriodLabel = Annotated[
     str,
-    StringConstraints(
-        pattern=r"^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"
-    ),
+    StringConstraints(pattern=r"^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2])(-(0[1-9]|[12][0-9]|3[01]))?)?$"),
     AfterValidator(_real_calendar_date),
 ]
 """``2023``, ``2023-Q1``, ``2023-01`` or ``2023-01-31``."""
@@ -134,6 +132,7 @@ class Parameters(Mapping[str, Any]):
     """
 
     __slots__ = ("_items",)
+    _items: MappingProxyType[str, Any]
 
     def __init__(self, items: Mapping[str, Any]) -> None:
         frozen = {k: tuple(v) if isinstance(v, list) else v for k, v in items.items()}
@@ -181,9 +180,7 @@ ParameterMap = Annotated[
     dict[str, ParameterValue],
     BeforeValidator(_thaw_parameters),
     AfterValidator(Parameters),
-    PlainSerializer(
-        lambda value: value.to_dict(), return_type=dict[str, ParameterValue]
-    ),
+    PlainSerializer(lambda value: value.to_dict(), return_type=dict[str, ParameterValue]),
 ]
 """Method parameters, validated as a ``dict`` and stored as ``Parameters``."""
 
@@ -230,9 +227,7 @@ class Period(_Model):
         for field in ("start", "end"):
             label = getattr(self, field)
             if period_frequency(label) != self.frequency:
-                raise ValueError(
-                    f"{field} {label!r} does not match frequency {self.frequency!r}"
-                )
+                raise ValueError(f"{field} {label!r} does not match frequency {self.frequency!r}")
         # Labels of the same frequency sort in time order.
         if self.start > self.end:
             raise ValueError(f"start {self.start!r} is after end {self.end!r}")
@@ -250,9 +245,7 @@ class Method(_Model):
         description="Identifier of the method, for example `z_score` or `historical_mean`."
     )
     description: NonEmptyStr
-    parameters: ParameterMap = Field(
-        description="Parameter names and the values used."
-    )
+    parameters: ParameterMap = Field(description="Parameter names and the values used.")
 
 
 class NumericResult(_Model):

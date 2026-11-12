@@ -77,11 +77,14 @@ def test_placeholders_name_the_issue_that_fills_them():
 
 def test_layout_matches_repository_root():
     listed = {
-        name.rstrip("/")
-        for name in re.findall(r"^- `([^`]+)`", section("Repository layout"), re.M)
+        name.rstrip("/") for name in re.findall(r"^- `([^`]+)`", section("Repository layout"), re.M)
     }
     present = {p.name for p in ROOT.iterdir() if not p.name.startswith(".")}
-    present |= {p.name for p in ROOT.iterdir() if p.name in {".gitignore", ".python-version", ".github", ".claude"}}
+    present |= {
+        p.name
+        for p in ROOT.iterdir()
+        if p.name in {".gitignore", ".python-version", ".github", ".claude"}
+    }
     assert listed - present == set(), "layout lists paths that do not exist"
     assert present - listed == set(), "layout is missing top-level paths"
 
@@ -327,12 +330,30 @@ def test_indicator_area_table_places_every_indicator_code():
         assert area in areas, area
     placed = set(re.findall(r"`([A-Z0-9_.]+)`", " ".join(areas.values())))
     codes = {
-        "BCA_NGDPD", "NGDPDPC", "NGDPD", "GGXWDG_NGDP", "GGXCNL_NGDP", "PCPIEPCH",
-        "PCPIPCH", "LP", "NGDP_RPCH", "LUR", "BN.CAB.XOKA.GD.ZS",
-        "FS.AST.PRVT.GD.ZS", "NE.EXP.GNFS.CD", "DT.DOD.DECT.CD",
-        "BX.KLT.DINV.CD.WD", "NY.GDP.MKTP.CD", "NY.GDP.MKTP.KD.ZG",
-        "NY.GDP.PCAP.CD", "NY.GNS.ICTR.ZS", "NE.IMP.GNFS.CD", "FP.CPI.TOTL.ZG",
-        "IT.CEL.SETS.P2", "SP.POP.TOTL", "SL.UEM.TOTL.ZS",
+        "BCA_NGDPD",
+        "NGDPDPC",
+        "NGDPD",
+        "GGXWDG_NGDP",
+        "GGXCNL_NGDP",
+        "PCPIEPCH",
+        "PCPIPCH",
+        "LP",
+        "NGDP_RPCH",
+        "LUR",
+        "BN.CAB.XOKA.GD.ZS",
+        "FS.AST.PRVT.GD.ZS",
+        "NE.EXP.GNFS.CD",
+        "DT.DOD.DECT.CD",
+        "BX.KLT.DINV.CD.WD",
+        "NY.GDP.MKTP.CD",
+        "NY.GDP.MKTP.KD.ZG",
+        "NY.GDP.PCAP.CD",
+        "NY.GNS.ICTR.ZS",
+        "NE.IMP.GNFS.CD",
+        "FP.CPI.TOTL.ZG",
+        "IT.CEL.SETS.P2",
+        "SP.POP.TOTL",
+        "SL.UEM.TOTL.ZS",
     }
     assert codes <= placed, codes - placed
     assert "#6" in match.group(1)
@@ -402,5 +423,8 @@ def test_every_indicator_is_supported_or_explained():
 
 def test_inflation_codes_use_the_imf_meaning():
     section = coverage_section()
-    assert "**`PCPIPCH` is annual-average inflation and `PCPIEPCH` is\n   end-of-period inflation.**" in section
+    assert (
+        "**`PCPIPCH` is annual-average inflation and `PCPIEPCH` is\n   end-of-period inflation.**"
+        in section
+    )
     assert "gross\n   savings as a percent of GDP" in section

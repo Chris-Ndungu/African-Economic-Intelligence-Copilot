@@ -140,11 +140,10 @@ def table(header: list[str], body: list[list]) -> str:
 
 
 def write_matrix(con, codes: list[str]) -> None:
-    cells = {
-        (c, i): (f, l, n, w)
-        for c, i, f, l, n, w in rows(con, "select * from cells")
-    }
-    countries = rows(con, "select country_code, country_name from dim_country order by country_code")
+    cells = {(c, i): (f, last, n, w) for c, i, f, last, n, w in rows(con, "select * from cells")}
+    countries = rows(
+        con, "select country_code, country_name from dim_country order by country_code"
+    )
     with OUTPUT.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["country_code", "country_name", *codes])
@@ -163,36 +162,69 @@ def report(con, codes: list[str]) -> None:
     print(f"# Coverage figures, profiled against {PROFILING_DATE.isoformat()}\n")
 
     print("## Row counts\n")
-    print(table(["data_source", "rows", "NULL indicator_value", "is_forecast = true"], [
-        list(r) for r in rows(con, """
+    print(
+        table(
+            ["data_source", "rows", "NULL indicator_value", "is_forecast = true"],
+            [
+                list(r)
+                for r in rows(
+                    con,
+                    """
             select data_source, count(*), count(*) filter (where indicator_value is null),
                    count(*) filter (where is_forecast)
-            from macro group by data_source order by data_source""")
-    ]))
+            from macro group by data_source order by data_source""",
+                )
+            ],
+        )
+    )
     total = rows(con, "select count(*) from macro")[0][0]
-    dupes = rows(con, """select count(*) from (select country_code, indicator_code, report_year
-                         from macro group by all having count(*) > 1)""")[0][0]
-    unknown_codes = rows(con, """select distinct indicator_code from macro
-                                 where indicator_code not in (select indicator_code from dim_indicator)""")
-    unknown_countries = rows(con, """select distinct country_code from macro
-                                     where country_code not in (select country_code from dim_country)""")
+    dupes = rows(
+        con,
+        """select count(*) from (select country_code, indicator_code, report_year
+                         from macro group by all having count(*) > 1)""",
+    )[0][0]
+    unknown_codes = rows(
+        con,
+        """select distinct indicator_code from macro
+                                 where indicator_code not in (select indicator_code from dim_indicator)""",
+    )
+    unknown_countries = rows(
+        con,
+        """select distinct country_code from macro
+                                     where country_code not in (select country_code from dim_country)""",
+    )
     print(f"\nTotal rows: {total}. Duplicate country-indicator-year keys: {dupes}.")
-    print(f"Codes in dim_indicator: {len(codes)}. Codes in the fact: "
-          f"{rows(con, 'select count(distinct indicator_code) from macro')[0][0]}.")
-    print(f"Fact codes not in dim_indicator: {[r[0] for r in unknown_codes]}. "
-          f"Fact countries not in dim_country: {[r[0] for r in unknown_countries]}.")
+    print(
+        f"Codes in dim_indicator: {len(codes)}. Codes in the fact: "
+        f"{rows(con, 'select count(distinct indicator_code) from macro')[0][0]}."
+    )
+    print(
+        f"Fact codes not in dim_indicator: {[r[0] for r in unknown_codes]}. "
+        f"Fact countries not in dim_country: {[r[0] for r in unknown_countries]}."
+    )
     print("Countries in dim_country:", rows(con, "select count(*) from dim_country")[0][0])
 
     print("\n## is_forecast by source and year\n")
-    print(table(["data_source", "is_forecast", "first year", "last year", "rows"], [
-        list(r) for r in rows(con, """
+    print(
+        table(
+            ["data_source", "is_forecast", "first year", "last year", "rows"],
+            [
+                list(r)
+                for r in rows(
+                    con,
+                    """
             select data_source, is_forecast, min(report_year), max(report_year), count(*)
-            from macro group by all order by 1, 2""")
-    ]))
+            from macro group by all order by 1, 2""",
+                )
+            ],
+        )
+    )
 
     print("\n## Indicator windows (actual values only)\n")
     body = []
-    for r in rows(con, """
+    for r in rows(
+        con,
+        """
         select i.indicator_code, i.data_source, i.metric_unit, w.first_year, w.last_year,
                w.window_years,
                (select count(*) from macro m where m.indicator_code = i.indicator_code
@@ -207,29 +239,60 @@ def report(con, codes: list[str]) -> None:
                        / sum(c.window_years), 1)
                   from cells c where c.indicator_code = i.indicator_code) as pct_missing_all
         from dim_indicator i left join windows w using (indicator_code)
-        order by i.data_source, i.indicator_code""", [MIN_YEARS, ANNUAL_STALE_BEFORE]):
+        order by i.data_source, i.indicator_code""",
+        [MIN_YEARS, ANNUAL_STALE_BEFORE],
+    ):
         body.append(list(r))
-    print(table(["code", "source", "unit", "window first", "window last", "window years",
-                 "NULL actual rows", "countries with a value",
-                 f"countries with >= {MIN_YEARS} years",
-                 f"countries with last year >= {ANNUAL_STALE_BEFORE}",
-                 "% missing, all 54 countries"], body))
+    print(
+        table(
+            [
+                "code",
+                "source",
+                "unit",
+                "window first",
+                "window last",
+                "window years",
+                "NULL actual rows",
+                "countries with a value",
+                f"countries with >= {MIN_YEARS} years",
+                f"countries with last year >= {ANNUAL_STALE_BEFORE}",
+                "% missing, all 54 countries",
+            ],
+            body,
+        )
+    )
     stats = {r[0]: r for r in body}
 
     print("\n## IMF forecast years (excluded from the matrix)\n")
-    print(table(["code", "first forecast year", "last forecast year", "forecast rows",
-                 "countries"], [list(r) for r in rows(con, """
+    print(
+        table(
+            ["code", "first forecast year", "last forecast year", "forecast rows", "countries"],
+            [
+                list(r)
+                for r in rows(
+                    con,
+                    """
             select indicator_code, min(report_year), max(report_year), count(*),
                    count(distinct country_code)
-            from macro where is_forecast group by 1 order by 1""")]))
+            from macro where is_forecast group by 1 order by 1""",
+                )
+            ],
+        )
+    )
 
     print("\n## Supported-indicator rule\n")
-    print(f"Rule: at least {MIN_COUNTRIES} of 54 countries have {MIN_YEARS} or more actual "
-          f"years with a value, and at least {MIN_COUNTRIES} countries have a last actual "
-          f"year of {ANNUAL_STALE_BEFORE} or later.\n")
+    print(
+        f"Rule: at least {MIN_COUNTRIES} of 54 countries have {MIN_YEARS} or more actual "
+        f"years with a value, and at least {MIN_COUNTRIES} countries have a last actual "
+        f"year of {ANNUAL_STALE_BEFORE} or later.\n"
+    )
     passes = {code: s[8] >= MIN_COUNTRIES and s[9] >= MIN_COUNTRIES for code, s in stats.items()}
-    print(table(["code", f">= {MIN_YEARS} years", f"last >= {ANNUAL_STALE_BEFORE}", "rule met"],
-                [[c, stats[c][8], stats[c][9], "yes" if passes[c] else "no"] for c in stats]))
+    print(
+        table(
+            ["code", f">= {MIN_YEARS} years", f"last >= {ANNUAL_STALE_BEFORE}", "rule met"],
+            [[c, stats[c][8], stats[c][9], "yes" if passes[c] else "no"] for c in stats],
+        )
+    )
 
     print("\n## Overlapping concepts\n")
     body = []
@@ -237,41 +300,99 @@ def report(con, codes: list[str]) -> None:
         for code in (imf, wb):
             s = stats[code]
             body.append([concept, code, s[7], s[8], s[9], f"{s[3]}-{s[4]}", s[10]])
-    print(table(["concept", "code", "countries with a value", f">= {MIN_YEARS} years",
-                 f"last >= {ANNUAL_STALE_BEFORE}", "window", "% missing"], body))
+    print(
+        table(
+            [
+                "concept",
+                "code",
+                "countries with a value",
+                f">= {MIN_YEARS} years",
+                f"last >= {ANNUAL_STALE_BEFORE}",
+                "window",
+                "% missing",
+            ],
+            body,
+        )
+    )
 
-    print("\n## Stale annual series (last actual year before "
-          f"{ANNUAL_STALE_BEFORE})\n")
-    print(table(["code", "countries"], [list(r) for r in rows(con, """
+    print(f"\n## Stale annual series (last actual year before {ANNUAL_STALE_BEFORE})\n")
+    print(
+        table(
+            ["code", "countries"],
+            [
+                list(r)
+                for r in rows(
+                    con,
+                    """
         select indicator_code,
                string_agg(country_code || ' (' || last_year || ')', ', ' order by country_code)
         from cells where years_with_value > 0 and last_year < ?
-        group by 1 order by 1""", [ANNUAL_STALE_BEFORE])]))
+        group by 1 order by 1""",
+                    [ANNUAL_STALE_BEFORE],
+                )
+            ],
+        )
+    )
 
     print("\n## Entirely missing country-indicator pairs\n")
-    print(table(["code", "countries"], [list(r) for r in rows(con, """
+    print(
+        table(
+            ["code", "countries"],
+            [
+                list(r)
+                for r in rows(
+                    con,
+                    """
         select indicator_code, string_agg(country_code, ', ' order by country_code)
-        from cells where years_with_value = 0 group by 1 order by 1""")]))
+        from cells where years_with_value = 0 group by 1 order by 1""",
+                )
+            ],
+        )
+    )
 
     print("\n## Countries with no macro data at all\n")
-    print([r[0] for r in rows(con, """
+    print(
+        [
+            r[0]
+            for r in rows(
+                con,
+                """
         select country_code from cells group by 1 having sum(years_with_value) = 0
-        order by 1""")])
+        order by 1""",
+            )
+        ]
+    )
 
     print("\n## FX capture dates\n")
-    first, last, n = rows(con, """select min(capture_date), max(capture_date),
-                                  count(distinct capture_date) from fx""")[0]
-    print(f"{n} capture dates from {first} to {last}; latest is "
-          f"{(PROFILING_DATE - last).days} days before {PROFILING_DATE}.")
-    print("Dates:", ", ".join(str(r[0]) for r in rows(
-        con, "select distinct capture_date from fx order by 1")))
-    print("Rows per date:", ", ".join(f"{r[0]}: {r[1]}" for r in rows(
-        con, "select capture_date, count(*) from fx group by 1 order by 1")))
-    print("NULL fx_rate_usd rows:", rows(
-        con, "select count(*) from fx where fx_rate_usd is null or fx_rate_usd = ''")[0][0])
+    first, last, n = rows(
+        con,
+        """select min(capture_date), max(capture_date),
+                                  count(distinct capture_date) from fx""",
+    )[0]
+    print(
+        f"{n} capture dates from {first} to {last}; latest is "
+        f"{(PROFILING_DATE - last).days} days before {PROFILING_DATE}."
+    )
+    print(
+        "Dates:",
+        ", ".join(str(r[0]) for r in rows(con, "select distinct capture_date from fx order by 1")),
+    )
+    print(
+        "Rows per date:",
+        ", ".join(
+            f"{r[0]}: {r[1]}"
+            for r in rows(con, "select capture_date, count(*) from fx group by 1 order by 1")
+        ),
+    )
+    print(
+        "NULL fx_rate_usd rows:",
+        rows(con, "select count(*) from fx where fx_rate_usd is null or fx_rate_usd = ''")[0][0],
+    )
 
     print("\n## FX per country\n")
-    fx_rows = rows(con, """
+    fx_rows = rows(
+        con,
+        """
         with d as (
             select country_code, capture_date, fx_rate_usd,
                    capture_date - lag(capture_date) over (
@@ -286,13 +407,31 @@ def report(con, codes: list[str]) -> None:
         )
         select c.country_code, c.currency_code, s.n, s.first_date, s.last_date, s.max_gap,
                s.latest_rate
-        from dim_country c left join s using (country_code) order by c.country_code""")
+        from dim_country c left join s using (country_code) order by c.country_code""",
+    )
     body = []
-    for code, currency, n, f, l, gap, rate in fx_rows:
-        stale = None if l is None else ("yes" if (PROFILING_DATE - l).days > FX_STALE_DAYS else "no")
-        body.append([code, currency, n, f, l, gap, rate, stale])
-    print(table(["country", "currency", "capture dates", "first", "last", "largest gap (days)",
-                 "latest fx_rate_usd", f"stale (> {FX_STALE_DAYS} days)"], body))
+    for code, currency, n, f, last, gap, rate in fx_rows:
+        stale = (
+            None
+            if last is None
+            else ("yes" if (PROFILING_DATE - last).days > FX_STALE_DAYS else "no")
+        )
+        body.append([code, currency, n, f, last, gap, rate, stale])
+    print(
+        table(
+            [
+                "country",
+                "currency",
+                "capture dates",
+                "first",
+                "last",
+                "largest gap (days)",
+                "latest fx_rate_usd",
+                f"stale (> {FX_STALE_DAYS} days)",
+            ],
+            body,
+        )
+    )
     print("\nCountries with FX data:", sum(1 for r in fx_rows if r[2]))
 
 

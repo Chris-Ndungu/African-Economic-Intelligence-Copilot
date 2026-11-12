@@ -1,0 +1,52 @@
+# Local development stack: `docker compose up`, then open http://localhost:8000.
+# Every setting has a local default here; nothing is read from .env.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://copilot:copilot@db:5432/copilot
+      COPILOT_LOG_LEVEL: info
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Source is mounted so Python edits reload the server and template and
+      # static edits show on the next refresh, without rebuilding.
+      - ./backend:/app/backend
+      - ./copilot_core:/app/copilot_core
+      - ./migrations:/app/migrations
+      - ./api:/app/api
+      - ./data/demo:/app/data/demo:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres-data:

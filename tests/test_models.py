@@ -615,8 +615,17 @@ def frozen_parameters_finding():
         lambda p: p._items.__setitem__("b", 99.0),
     ],
     ids=[
-        "set", "set-nan", "set-object", "delete", "update", "pop", "clear",
-        "list-append", "list-set", "replace-store", "store-set",
+        "set",
+        "set-nan",
+        "set-object",
+        "delete",
+        "update",
+        "pop",
+        "clear",
+        "list-append",
+        "list-set",
+        "replace-store",
+        "store-set",
     ],
 )
 def test_parameters_cannot_be_changed_in_place(change):
@@ -909,9 +918,7 @@ def contract_digest():
 
 
 # contract_digest() computed with copilot_core/models.py at b086c7b.
-CONTRACT_DIGEST_AT_B086C7B = (
-    "96f449bd4747e1fc89581ab06681b8e132106f85c53ea8c19fc24e9a40ff3f2e"
-)
+CONTRACT_DIGEST_AT_B086C7B = "96f449bd4747e1fc89581ab06681b8e132106f85c53ea8c19fc24e9a40ff3f2e"
 
 
 def test_dumps_and_schemas_are_unchanged_since_b086c7b():

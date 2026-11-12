@@ -12,9 +12,13 @@ Commands
 
 - `uv sync` - install dependencies
 - `uv run pytest` - the whole suite
+- `uv run ruff check` - lint; `uv run ruff check --fix` fixes what it can
+- `uv run ruff format` - format the code; `uv run ruff format --check` only reports
+- `uv run mypy` - type-check `copilot_core` and `backend`
 - `uv run pytest tests/test_smoke.py` - one test file
 - `uv run uvicorn backend.main:app --reload` - serve the pages and the API at `http://localhost:8000` (API docs at `/docs`)
 - `uv run pytest tests/test_web.py` - the workspace pages, the vendored-file checksums and the OpenAPI contract validation; `api/openapi.yaml` is validated by `uv run pytest`
+- `docker compose up` - build and run Postgres and the app with migrations applied, at `http://localhost:8000`; `docker compose down -v` stops it and deletes the database
 - `docker run -d --name copilot-postgres -e POSTGRES_USER=copilot -e POSTGRES_PASSWORD=copilot -e POSTGRES_DB=copilot -p 5432:5432 postgres:17` - start a local Postgres; then set `DATABASE_URL=postgresql+psycopg://copilot:copilot@localhost:5432/copilot` in `.env` or the shell
 - `uv run alembic upgrade head` - apply the migrations to the database in `DATABASE_URL`; `uv run alembic downgrade base` removes them
 - `uv run alembic check` - fail if the SQLAlchemy models in `copilot_core/db.py` and the migrations differ (needs a database at head)
@@ -30,6 +34,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `docker-compose.yml` - the local stack: Postgres and the app, built from `backend/Dockerfile`
 - `alembic.ini` - Alembic configuration; the connection string comes from `DATABASE_URL`, never this file
 - `api/` - the OpenAPI contract, `api/openapi.yaml`
 - `backend/` - FastAPI application: thin routes, settings, no business logic; `templates/` holds the Jinja pages and HTMX partials, and `static/` the CSS, small scripts and vendored files

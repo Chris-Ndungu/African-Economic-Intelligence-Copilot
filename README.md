@@ -1,5 +1,7 @@
 # African Economic Intelligence Copilot
 
+[![CI](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/actions/workflows/ci.yml)
+
 An AI-powered economic investigation workspace for analysts studying African economies.
 
 ## Setup
@@ -20,6 +22,23 @@ Then open http://localhost:8000. FastAPI serves the workspace pages, the
 static files and the JSON API from one process; the API docs are at
 http://localhost:8000/docs. No database, Gemini key or network access is
 needed to see the workspace.
+
+## Run with Docker
+
+With only Docker installed:
+
+```
+docker compose up
+```
+
+Then open http://localhost:8000. Compose starts Postgres (`db`) and the app
+(`api`), applies the database migrations, and serves the workspace and the
+JSON API. Editing Python files reloads the server; editing templates or
+static files shows on the next browser refresh. No `.env` file is needed.
+
+- Ports 5432 (Postgres) and 8000 (the app) must be free on the host.
+- Stop with `docker compose down`; the database is kept in a named volume.
+- Reset the database with `docker compose down -v`, then `docker compose up`.
 
 ## Tests
 
