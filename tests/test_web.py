@@ -111,7 +111,7 @@ def test_workspace_has_header_sidebar_and_main(client):
     assert "New investigation" in text(header)
 
     sidebar = page.find("aside", aria_label="Selection")
-    for label in ("Country", "Indicator", "From", "To", "Show trend"):
+    for label in ("Countries", "Indicator", "From", "To"):
         assert label in text(sidebar)
 
     main = page.find("main", aria_label="Workspace")

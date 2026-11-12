@@ -25,6 +25,13 @@ from copilot_core.investigation import run_trend_investigation
 from copilot_core.models import SeriesResult
 from copilot_core.repository import RepositoryError
 from copilot_core.schemas import InvestigationCreate
+from copilot_core.selection import (
+    MAX_COUNTRIES,
+    SelectionPanel,
+    SubmittedSelection,
+    build_selection_panel,
+    submitted_from_form,
+)
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = HERE / "templates"
@@ -75,21 +82,42 @@ def _get_data(request: Request) -> DataService | None:
         return None
 
 
+def _panel(request: Request, submitted: SubmittedSelection) -> SelectionPanel | None:
+    """The panel state, or ``None`` when the data service cannot be read."""
+    data = _get_data(request)
+    if data is None:
+        return None
+    try:
+        return build_selection_panel(
+            data.list_countries(), data.list_indicators(), data.list_coverage(), submitted
+        )
+    except DataUnavailableError:
+        return None
+
+
+def _render_panel(
+    request: Request, name: str, submitted: SubmittedSelection, extra: dict[str, object]
+) -> HTMLResponse:
+    context = {"panel": _panel(request, submitted), "max_countries": MAX_COUNTRIES, **extra}
+    return templates.TemplateResponse(request, name, context)
+
+
 @router.get("/", response_class=HTMLResponse)
 def workspace(request: Request) -> HTMLResponse:
-    """The workspace: pick a country, an indicator and a period."""
-    data = _get_data(request)
-    countries = indicators = []
-    if data is not None:
-        try:
-            countries, indicators = data.list_countries(), data.list_indicators()
-        except DataUnavailableError:
-            data = None
-    return templates.TemplateResponse(
-        request,
-        "pages/workspace.html",
-        {"countries": countries, "indicators": indicators, "data_available": data is not None},
-    )
+    """The workspace: the selection panel and the results area."""
+    return _render_panel(request, "pages/workspace.html", SubmittedSelection(), {})
+
+
+@router.post("/partials/selection", response_class=HTMLResponse)
+async def selection_partial(request: Request) -> HTMLResponse:
+    """The selection panel for the submitted form values.
+
+    The form is URL-encoded and parsed with the standard library. The state
+    comes from `copilot_core.selection`, not from the JSON API.
+    """
+    form = parse_qs((await request.body()).decode(), keep_blank_values=True)
+    submitted = submitted_from_form(form)
+    return await run_in_threadpool(_render_panel, request, "partials/selection.html", submitted, {})
 
 
 @router.get("/partials/trend", response_class=HTMLResponse)

@@ -1,0 +1,68 @@
+<div id="selection-panel" class="selection-panel">
+{% if panel is none %}
+  <div class="panel-error" role="alert">
+    <p class="message">The selection options cannot be loaded because the data service is unavailable.</p>
+    <button class="button" type="button" hx-post="/partials/selection" hx-target="#selection-panel" hx-swap="outerHTML">Retry</button>
+  </div>
+{% else %}
+  <form class="selection" id="selection-form"{% if panel.selection %} data-valid-selection="true"{% endif %} action="/" method="post"
+        hx-post="/partials/selection" hx-trigger="change" hx-target="#selection-panel"
+        hx-swap="outerHTML" hx-indicator="#selection-loading" hx-sync="this:replace">
+    <p id="selection-loading" class="htmx-indicator" role="status">Updating selection…</p>
+
+    <label for="indicator">Indicator</label>
+    <select id="indicator" name="indicator">
+      <option value=""{% if not panel.indicator %} selected{% endif %}>Choose an indicator</option>
+      {% for option in panel.indicators %}
+      <option value="{{ option.code }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="start">From</label>
+    <select id="start" name="start"{% if not panel.periods %} disabled{% endif %}>
+      {% for period in panel.periods %}
+      <option value="{{ period }}"{% if period == panel.start %} selected{% endif %}>{{ period }}</option>
+      {% else %}
+      <option value="">Choose an indicator and countries</option>
+      {% endfor %}
+    </select>
+    <label for="end">To</label>
+    <select id="end" name="end"{% if not panel.periods %} disabled{% endif %}>
+      {% for period in panel.periods %}
+      <option value="{{ period }}"{% if period == panel.end %} selected{% endif %}>{{ period }}</option>
+      {% else %}
+      <option value="">Choose an indicator and countries</option>
+      {% endfor %}
+    </select>
+    {% if panel.range_start %}
+    <p class="hint">Available: {{ panel.range_start }} to {{ panel.range_end }}.</p>
+    {% endif %}
+    {% for note in panel.limiting %}<p class="hint limit">{{ note }}</p>{% endfor %}
+
+    <fieldset class="countries">
+      <legend>Countries (up to {{ max_countries }})</legend>
+      <label for="country-filter">Filter countries</label>
+      <input id="country-filter" type="search" autocomplete="off" hx-preserve="true">
+      <ul class="country-list">
+        {% for option in panel.countries %}
+        <li data-filter="{{ (option.name ~ ' ' ~ option.code)|lower }}">
+          <input type="checkbox" id="country-{{ option.code }}" name="country" value="{{ option.code }}"
+                 {% if option.selected %}checked{% endif %}{% if option.disabled %} disabled aria-describedby="reason-{{ option.code }}"{% endif %}>
+          <label for="country-{{ option.code }}">{{ option.name }} ({{ option.code }})</label>
+          {% if option.reason %}<span class="reason" id="reason-{{ option.code }}">{{ option.reason }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </fieldset>
+
+    <div class="panel-status" aria-live="polite">
+      {% for message in panel.messages %}<p class="notice">{{ message }}</p>{% endfor %}
+      {% for error in panel.errors %}<p class="message" role="alert">{{ error }}</p>{% endfor %}
+      {% if panel.selection is none %}
+      {% for item in panel.missing %}<p class="missing">{{ item }}</p>{% endfor %}
+      {% endif %}
+    </div>
+
+  </form>
+{% endif %}
+</div>

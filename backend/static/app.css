@@ -150,3 +150,19 @@ body {
 .message {
   font-weight: 600;
 }
+
+/* Selection panel */
+.selection-panel { position: relative; }
+.selection fieldset { border: 1px solid var(--color-border); border-radius: var(--radius); margin: 0; padding: 0.5rem; }
+.country-list { list-style: none; margin: 0.5rem 0 0; padding: 0; max-height: 16rem; overflow-y: auto; }
+.country-list li { padding: 0.125rem 0; }
+.country-list li[hidden] { display: none; }
+.country-list .reason { display: block; margin-left: 1.5rem; color: var(--color-muted); font-size: 0.875rem; }
+.hint { margin: 0; color: var(--color-muted); font-size: 0.875rem; }
+.notice, .missing { margin: 0; font-size: 0.875rem; }
+.missing { color: var(--color-muted); }
+.panel-error { border: 1px solid var(--color-text); border-radius: var(--radius); padding: 0.5rem; margin-top: 0.5rem; }
+.panel-error[hidden] { display: none; }
+.htmx-indicator { opacity: 0; margin: 0; font-size: 0.875rem; color: var(--color-muted); transition: opacity 150ms ease-in; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+.selection select:focus-visible, .selection input:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
