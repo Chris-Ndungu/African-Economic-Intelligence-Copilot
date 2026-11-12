@@ -1,4 +1,5 @@
 # African Economic Intelligence Copilot
+
 ## MVP Product Scope and Technical Decisions
 
 **Status:** MVP scope agreed; tech stack selected (FastAPI with Jinja and HTMX)  
@@ -42,7 +43,7 @@ The copilot retrieves economic data, performs statistical analysis, presents int
 ## 2. Agreed product scope
 
 | Area | Decision |
-|---|---|
+| --- | --- |
 | Primary audience | Economic and data analysts |
 | Primary job | Investigate economic developments |
 | Investigation types | Explain changes, compare countries, investigate relationships, detect anomalies |
@@ -95,19 +96,22 @@ The first version will not automatically conduct external web research. Explanat
 
 Delivery is ordered so that a complete, deployed, observable end-to-end system exists before analytical depth is added.
 
-**Tier 1: core MVP (must ship)**
+### Tier 1: core MVP (must ship)
+
 - Demo mode end to end on bundled data (DuckDB over Parquet)
 - Trend/comparison and anomaly investigations via approved analysis tools
 - Gemini interpretation of computed results, with numerical claims traceable to tool outputs
 - Saved investigation history and PDF export
 - Engineering foundations: specs and public task tracker, `AGENTS.md` with modular docs, unit/integration/end-to-end tests, one-command Docker Compose setup, public deployment, CI/CD with dev and prod, observability, user-impact alerting, and an on-call agent
 
-**Tier 2: product completeness (after Tier 1)**
+### Tier 2: product completeness (after Tier 1)
+
 - Correlation and lagged-relationship investigations
 - Live BigQuery mode for authorized users
 - Constrained SQL fallback with sqlglot validation
 
-**Tier 3: depth (if time permits)**
+### Tier 3: depth (if time permits)
+
 - Configurable anomaly methods and drill-down analysis
 - Richer workspace interactions (linked charts, source explorer)
 
@@ -144,6 +148,7 @@ copilot_core
 ```
 
 **Why:**
+
 - One language the owner can review end to end: every file is Python, HTML, CSS, plain JavaScript, or Markdown.
 - No Node toolchain and no frontend build step.
 - Pages render the same Pydantic results the API returns, so there are no separate frontend types to keep in sync.
@@ -152,11 +157,13 @@ copilot_core
 - One trace can span browser → API → data layer → Gemini, which supports the observability criterion.
 
 **Alternatives considered:**
+
 - **React + TypeScript SPA (Vite, Tailwind, shadcn/ui, TanStack Query):** Rejected. The owner does not know React and must be able to review and own all the code, and it adds a second language and toolchain. This was the original choice, scaffolded in #9 and #10, and replaced by #74.
 - **Streamlit monolith:** Fastest to build, but it has no real frontend/backend split and it limits the multi-panel workspace.
 - **Python full-stack frameworks (Reflex, Dash, NiceGUI):** More control than Streamlit, but smaller ecosystems and framework lock-in.
 
 **Rules:**
+
 - Write the OpenAPI spec first and commit it. The JSON API changes only after the contract does.
 - HTML routes are outside the OpenAPI contract and are registered with `include_in_schema=False`.
 - Templates and browser scripts display `copilot_core` results; they never compute new numbers.
@@ -170,6 +177,7 @@ copilot_core
 The copilot should consume the existing project's curated BigQuery models and marts rather than duplicate the ingestion pipelines.
 
 **Why:**
+
 - Ingestion, transformation, and AI investigation have different responsibilities.
 - Changes to the copilot should not destabilize the data pipelines.
 - Each project can be tested, deployed, and maintained independently.
@@ -217,6 +225,7 @@ The application should not query raw ingestion tables by default.
 **Decision:** Use approved Python analysis functions for common tasks, with constrained AI-generated SQL as a fallback (Tier 2).
 
 Initial approved functions should cover:
+
 - Time-series trends and growth rates
 - Country and indicator comparisons
 - Correlations and lagged relationships
@@ -228,6 +237,7 @@ Libraries: pandas, statsmodels, and scipy.
 When a question requires a query that the approved functions cannot answer, Gemini may generate SQL. The application must validate and constrain that SQL before execution against approved models.
 
 **Required controls:**
+
 - Read-only credentials and permissions
 - Allowlist of permitted datasets and tables
 - SQL validation with **sqlglot**: parse to an AST, accept only `SELECT`, check every table reference against the allowlist, and enforce a `LIMIT`
@@ -256,13 +266,15 @@ The application should provide the model with structured analytical outputs and 
 
 **Decision:** Provide two explicit data modes. Demo mode is the Tier 1 deliverable; live mode is Tier 2.
 
-**Demo mode**
+#### Demo mode
+
 - Uses bundled, documented sample data (a Parquet snapshot of the curated marts, queried with DuckDB).
 - Lets reviewers explore core analytical features without BigQuery credentials.
 - Clearly labels sample data and avoids presenting it as live economic information.
 - Must continue to work when BigQuery is unavailable.
 
-**Live mode**
+#### Live mode
+
 - Connects to curated BigQuery data for authorized users.
 - Uses server-side credentials (the Cloud Run service identity) and restricted permissions.
 - Never exposes credentials in browser code or the public repository.
@@ -278,6 +290,7 @@ If Gemini or BigQuery is unavailable, the application must clearly explain the l
 **Decision:** Use PostgreSQL with SQLAlchemy 2 and Alembic migrations. Run Postgres in Docker Compose locally and use a managed instance (Neon) for dev and prod.
 
 Store:
+
 - User question
 - Selected countries, indicators, and time periods
 - Analytical parameters and methods
@@ -298,6 +311,7 @@ For the MVP, saved investigations do not require collaborative editing, shared w
 **Decision:** Generate PDFs server-side from stored investigation results using Jinja2 HTML templates and WeasyPrint. Render charts as static images with Plotly/Kaleido. Do not trigger a second, independent AI answer when exporting.
 
 A report should contain:
+
 - Executive summary and key findings
 - Charts and supporting tables
 - Countries, indicators, and periods analyzed
@@ -321,7 +335,7 @@ Operational alerting on the application's own health (section 4.12) is separate 
 **Decision:** Three test layers. Python tests live in `tests/`, and unit, integration, and end-to-end tests (Playwright for Python via pytest-playwright) all run with one command, `uv run pytest`, and in CI. There is no `npm test`: templates and partials are tested with pytest and FastAPI TestClient, and browser behaviour with Playwright.
 
 | Layer | Tooling | Covers |
-|---|---|---|
+| --- | --- | --- |
 | Unit | pytest, hypothesis | Analytics functions, SQL validation, Pydantic contracts, Gemini orchestration with a stubbed model |
 | Integration | pytest + FastAPI TestClient against Postgres and DuckDB (via Docker Compose) | API endpoints, persistence, data service, PDF generation |
 | End to end | Playwright | Key user journeys: run an investigation, save it, reopen it, export a PDF; demo-mode labelling; service-unavailable errors |
@@ -331,6 +345,7 @@ Tests must not call the real Gemini API or BigQuery by default. Use recorded or 
 ### 4.11 Containerization and deployment
 
 **Decision:**
+
 - `docker compose up` starts the full local system: the API, Postgres, and the observability stack (`grafana/otel-lgtm`). There is no separate frontend service.
 - There is no frontend build or frontend container: FastAPI serves the pages, the static files, and the API from one process, so deployment is a single Cloud Run service per environment.
 - Two environments on Google Cloud Run: **dev** and **prod**, with separate secrets and databases.
@@ -382,7 +397,7 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 - **Agent team:**
 
 | Role | Responsibility | Inputs → outputs |
-|---|---|---|
+| --- | --- | --- |
 | PM agent | Turns requirements into specs and issues with acceptance criteria | plan.md → specs, issues |
 | Backend agent | Implements `copilot_core` and FastAPI routes against the contract | issue + OpenAPI → backend PR |
 | Frontend agent | Implements the UI in Jinja templates, HTMX partials, CSS, and small plain-JavaScript files, rendering `copilot_core` results | issue + `copilot_core` result models → frontend PR |
@@ -397,7 +412,7 @@ Authenticate to Google Cloud with Workload Identity Federation instead of long-l
 ## 5. Explicitly out of scope
 
 | Feature | Why it is excluded initially |
-|---|---|
+| --- | --- |
 | Forecasting and predictive models | Requires a different validation approach from historical investigation |
 | Causal inference claims | Requires stronger identification strategies than correlations or lagged relationships |
 | External web research | Adds retrieval, source-quality, and citation-validation complexity |
@@ -414,7 +429,8 @@ These features can be reconsidered after the MVP demonstrates reliable investiga
 
 ## 6. MVP acceptance criteria
 
-**Product**
+### Product
+
 - [ ] A reviewer can open the public demo without cloud credentials.
 - [ ] An analyst can select countries, indicators, and time periods or start with a natural-language question.
 - [ ] The copilot can perform trend, comparison, and anomaly investigations (relationship investigations in Tier 2).
@@ -427,7 +443,8 @@ These features can be reconsidered after the MVP demonstrates reliable investiga
 - [ ] The application handles unavailable data or AI services without fabricating success.
 - [ ] Live BigQuery access is read-only and protected from unauthorized use (Tier 2).
 
-**Engineering**
+### Engineering
+
 - [ ] README describes the problem, functionality, and expected behavior.
 - [ ] Specs and a public task tracker with acceptance criteria exist and are used.
 - [ ] `AGENTS.md` links to modular docs, including the agent team definition.
@@ -446,6 +463,7 @@ These features can be reconsidered after the MVP demonstrates reliable investiga
 Phases are ordered so that a working, end-to-end system exists early and later phases add depth.
 
 ### Phase 0 — Set up the AI-assisted workflow
+
 - Expand `_docs/AGENTS.md`, the modular docs in `_docs/`, and the agent team definition.
 - Create the public GitHub Project; turn this plan into specs and issues with acceptance criteria.
 - Add initial project skills and subagent definitions.
@@ -453,6 +471,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** A repository where agents have durable context and a tracked backlog.
 
 ### Phase 1 — Inspect the existing data platform
+
 - Review the existing ingestion repository and documentation.
 - Identify actual BigQuery datasets, dbt models, marts, schemas, and source metadata.
 - Map which countries, indicators, units, frequencies, and time periods are available.
@@ -462,6 +481,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** `_docs/data-contract.md` based on real models and fields, plus the demo dataset.
 
 ### Phase 2 — Contract and walking skeleton
+
 - Write the OpenAPI contract for investigations, analyses, history, and reports.
 - Scaffold the FastAPI app with the Jinja and HTMX workspace shell, `copilot_core`, Postgres with Alembic, and Docker Compose.
 - Wire one thin end-to-end path: select country and indicator → trend result → chart → saved investigation.
@@ -470,6 +490,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** A deployed skeleton that runs with one command locally and has CI.
 
 ### Phase 3 — Analytical foundation
+
 - Implement the DuckDB data service and filters.
 - Implement and test trend, growth, comparison, and anomaly functions (correlation and lag in Tier 2).
 - Define standard result objects with values, units, period, methodology, and source metadata.
@@ -477,6 +498,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** Tested analytical functions that work independently of the AI.
 
 ### Phase 4 — Gemini orchestration
+
 - Integrate the Gemini API with tool calling over the approved functions.
 - Ensure interpretations refer to returned results and acknowledge uncertainty; validate numerical claims.
 - Stream investigation progress to the frontend.
@@ -485,6 +507,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** A reliable AI investigation flow grounded in actual analysis outputs.
 
 ### Phase 5 — Workspace, history, and reports
+
 - Add natural-language input alongside interactive filters.
 - Display findings, charts, tables, source references, and caveats.
 - Complete investigation history (list, reopen, continue).
@@ -494,6 +517,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** A usable end-to-end investigation workspace.
 
 ### Phase 6 — Operations
+
 - Add OpenTelemetry instrumentation, structured logs, and metrics for the key journey.
 - Add Grafana dashboards and the user-impact alert.
 - Add the manually approved prod deployment.
@@ -502,6 +526,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** An observable, alerting, two-environment deployment with an on-call agent.
 
 ### Phase 7 — Tier 2 features
+
 - Correlation and lagged-relationship investigations.
 - Live BigQuery mode with read-only service identity, authentication, and cost controls.
 - Constrained SQL fallback with sqlglot validation.
@@ -509,6 +534,7 @@ Phases are ordered so that a working, end-to-end system exists early and later p
 **Deliverable:** Full product scope for authorized live use.
 
 ### Phase 8 — Validate and document
+
 - Test representative investigations across multiple countries and indicators.
 - Test missing data, unsupported questions, invalid SQL, and unavailable services.
 - Verify numerical consistency between text, charts, tables, and PDFs.
