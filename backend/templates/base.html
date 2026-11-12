@@ -16,6 +16,8 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {% set meta = page_meta(request) %}
+  <div class="mode-banner mode-{{ meta.data_mode }}" role="status" data-mode="{{ meta.data_mode }}">{{ banner_text(meta) }}</div>
   <header class="site-header">
     <h1>{{ request.app.state.settings.app_name }}</h1>
     <a class="button" href="/">New investigation</a>
@@ -23,5 +25,6 @@
   <div class="layout">
     {% block content %}{% endblock %}
   </div>
+  <script type="application/json" id="error-messages">{{ error_messages|tojson }}</script>
 </body>
 </html>

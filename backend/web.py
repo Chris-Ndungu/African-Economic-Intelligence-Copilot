@@ -24,13 +24,20 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from backend.api import EventStreamResponse
-from backend.dependencies import get_data_service, get_investigation_service, get_repository
+from backend.dependencies import (
+    get_app_meta,
+    get_data_service,
+    get_investigation_service,
+    get_repository,
+)
 from copilot_core.data import DataError, DataService, DataUnavailableError
+from copilot_core.error_messages import error_message, message_table
 from copilot_core.events import FailedEvent, Heartbeat, InProgressEvent, ProgressEvent, SavedEvent
 from copilot_core.findings_view import build_results_view
 from copilot_core.formatting import format_number
 from copilot_core.history import HistoryEntry, load_history
 from copilot_core.investigation import run_trend_investigation
+from copilot_core.meta import banner_text
 from copilot_core.models import SeriesResult
 from copilot_core.progress import build_run_request, describe_event, rerun_request
 from copilot_core.repository import (
@@ -63,6 +70,10 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.globals["htmx_file"] = HTMX_FILE
 templates.env.globals["plotly_file"] = PLOTLY_FILE
 templates.env.globals["sse_file"] = SSE_FILE
+templates.env.globals["page_meta"] = get_app_meta
+templates.env.globals["banner_text"] = banner_text
+templates.env.globals["error_messages"] = message_table()
+templates.env.globals["error_message"] = error_message
 templates.env.globals["max_question_length"] = MAX_QUESTION_LENGTH
 templates.env.globals["max_question_text"] = f"{MAX_QUESTION_LENGTH:,}"
 templates.env.filters["number"] = format_number
@@ -409,12 +420,7 @@ async def progress_html(events: AsyncGenerator[ProgressEvent | Heartbeat]) -> As
                 yield _outcome("saved", investigation_id=event.investigation_id)
                 yield sse_frame("close")
             elif isinstance(event, FailedEvent):
-                yield _outcome(
-                    "failed",
-                    investigation_id=event.investigation_id,
-                    code=event.code,
-                    message=event.message,
-                )
+                yield _outcome("failed", investigation_id=event.investigation_id, code=event.code)
                 yield sse_frame("close")
             elif isinstance(event, InProgressEvent):
                 yield _outcome("in_progress", investigation_id=event.investigation_id)

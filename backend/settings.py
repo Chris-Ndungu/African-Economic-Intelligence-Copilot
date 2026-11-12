@@ -8,6 +8,7 @@ tools use. An invalid value raises a `pydantic.ValidationError` that names
 the setting, which stops startup.
 """
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
 
     data_dir: Path = DEFAULT_DATA_DIR
     """Folder of the demo Parquet files read by the data service."""
+
+    demo_snapshot_date: date | None = None
+    """Date of the demo snapshot; when unset it is read from `data/demo/README.md`."""
 
     database_url: SecretStr | None = Field(default=None, validation_alias="DATABASE_URL")
     """Postgres connection string, or `None` when no database is configured.

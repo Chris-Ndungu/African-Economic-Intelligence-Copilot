@@ -13,7 +13,12 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic.json_schema import SkipJsonSchema
 
-from backend.dependencies import get_data_service, get_investigation_service, get_repository
+from backend.dependencies import (
+    get_app_meta,
+    get_data_service,
+    get_investigation_service,
+    get_repository,
+)
 from backend.errors import RunFailedError, json_responses, responses
 from copilot_core.data import DataService
 from copilot_core.events import Heartbeat, ProgressEvent
@@ -30,6 +35,7 @@ from copilot_core.schemas import (
     InvestigationRunAccepted,
     InvestigationRunRequest,
     InvestigationUpdate,
+    Meta,
 )
 
 DATA_MODE = "demo"  # Live mode on BigQuery arrives with #49.
@@ -69,6 +75,12 @@ async def server_sent_events(
             continue
         number += 1
         yield f"id: {number}\nevent: {event.event}\ndata: {event.model_dump_json()}\n\n"
+
+
+@router.get("/meta", tags=["health"], operation_id="getMeta")
+def get_meta(request: Request) -> Meta:
+    """The data mode, the demo snapshot date and whether Gemini is configured."""
+    return get_app_meta(request)
 
 
 @router.get(

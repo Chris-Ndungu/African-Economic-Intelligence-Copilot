@@ -5,7 +5,9 @@
     <span class="history-meta">
       <time class="local-time" datetime="{{ entry.created_iso }}">{{ entry.created_date }}</time>
       <span class="status status-{{ entry.status }}"><span aria-hidden="true">{{ entry.status_icon }}</span> {{ entry.status_label }}</span>
+      <span class="data-mode data-mode-{{ entry.data_mode }}">{{ entry.data_mode_label }}</span>
     </span>
+    {% if entry.error_title %}<span class="history-error">{{ entry.error_title }}</span>{% endif %}
   </a>
 </li>
 {% endfor %}

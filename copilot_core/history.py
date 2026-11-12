@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from copilot_core.error_messages import error_message
 from copilot_core.repository import (
     InvestigationNotFoundError,
     InvestigationPage,
@@ -47,6 +48,10 @@ STATUS_DISPLAY: dict[str, tuple[str, str]] = {
     "failed": ("Failed", "✕"),
 }
 """Status to its text label and icon. The icon never stands alone."""
+
+
+DATA_MODE_SHORT = {"demo": "Demo data", "live": "Live data"}
+"""The data mode an investigation was run with, as the history prints it."""
 
 
 class _Listing(Protocol):
@@ -131,6 +136,9 @@ class HistoryEntry:
     status_icon: str
     created_iso: str
     created_date: str
+    data_mode: str
+    data_mode_label: str
+    error_title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,8 +159,12 @@ def load_history(
     page = repository.list(limit=limit, cursor=cursor)
     entries: list[HistoryEntry] = []
     for item in page.items:
+        error_title = None
         try:
-            title = history_title(repository.get(item.id))
+            saved = repository.get(item.id)
+            title = history_title(saved)
+            if saved.status == "failed":
+                error_title = error_message(saved.error.code if saved.error else None).title
         except InvestigationNotFoundError:
             continue
         except RepositoryError:
@@ -167,6 +179,9 @@ def load_history(
                 status_icon=icon,
                 created_iso=iso_utc(item.created_at),
                 created_date=utc_date(item.created_at),
+                data_mode=item.data_mode,
+                data_mode_label=DATA_MODE_SHORT.get(item.data_mode, item.data_mode),
+                error_title=error_title,
             )
         )
     return HistoryPage(entries=entries, next_cursor=page.next_cursor)

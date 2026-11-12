@@ -7,6 +7,16 @@
 
   function byId(id) { return document.getElementById(id); }
 
+  // The wording comes from the server, rendered once into the page.
+  function messageText(code) {
+    var tag = byId("error-messages");
+    try {
+      return JSON.parse(tag.textContent)[code].text;
+    } catch (e) {
+      return code;
+    }
+  }
+
   function progress() {
     var box = byId("results");
     return box && box.classList.contains("run-progress") ? box : null;
@@ -30,7 +40,7 @@
     var hasQuestion = question.value.trim() !== "";
     var selection = byId("selection-form");
     var hasSelection = !!selection && selection.getAttribute("data-valid-selection") === "true";
-    var ready = hasQuestion || hasSelection;
+    var ready = (hasQuestion || hasSelection) && !button.hasAttribute("data-unavailable");
     var hint = byId("run-hint");
     if (hint && !hint.hasAttribute("data-sticky")) hint.hidden = ready;
     button.disabled = !ready || running();
@@ -88,7 +98,7 @@
       link.textContent = "Open the history";
       var holder = document.createElement("p");
       holder.appendChild(link);
-      stop(box, box.getAttribute("data-lost-text"), holder);
+      stop(box, messageText("connection_lost"), holder);
     }, QUIET_MS);
   }
 
@@ -96,7 +106,7 @@
     var cancel = event.target && event.target.closest && event.target.closest("[data-cancel-run]");
     if (!cancel) return;
     var box = progress();
-    if (box) stop(box, box.getAttribute("data-cancelled-text"));
+    if (box) stop(box, messageText("client_disconnected"));
   });
 
   document.addEventListener("htmx:sseOpen", function () {

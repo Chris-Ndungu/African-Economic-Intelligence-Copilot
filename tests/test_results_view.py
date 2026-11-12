@@ -116,7 +116,7 @@ def test_no_findings_shows_the_caveats_that_explain_why():
 def test_a_failed_investigation_shows_its_error_instead_of_findings():
     html = render(make_investigation(None, status="failed", error=failed()))
 
-    assert "The data service is unavailable." in html
+    assert "The data is unavailable." in html
     assert "Observed facts" not in html and "No findings" not in html
 
 

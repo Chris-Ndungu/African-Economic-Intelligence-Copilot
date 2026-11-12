@@ -16,8 +16,10 @@ from backend.settings import Settings
 from copilot_core.data import DataService, DuckDBDataService
 from copilot_core.db import create_db_engine
 from copilot_core.llm import GeminiClient, LLMClient
+from copilot_core.meta import get_meta
 from copilot_core.repository import DatabaseUnavailableError, InvestigationRepository
 from copilot_core.runs import InvestigationService, RunSettings
+from copilot_core.schemas import Meta
 
 _lock = threading.Lock()
 
@@ -61,6 +63,25 @@ def get_llm(request: Request) -> LLMClient:
             state.llm = GeminiClient(get_settings(request).gemini_config())
         llm: LLMClient = state.llm
     return llm
+
+
+def gemini_configured(request: Request) -> bool:
+    """Whether runs can reach Gemini: a key is set, or a client was provided."""
+    state = request.app.state
+    return (
+        get_settings(request).gemini_api_key is not None or getattr(state, "llm", None) is not None
+    )
+
+
+def get_app_meta(request: Request) -> Meta:
+    """The data mode, snapshot date and Gemini state; one answer for pages and `/api/meta`."""
+    settings = get_settings(request)
+    return get_meta(
+        settings.data_dir,
+        gemini_configured(request),
+        data_mode="demo",  # Live mode on BigQuery arrives with #49.
+        snapshot_date=settings.demo_snapshot_date,
+    )
 
 
 def run_settings(settings: Settings) -> RunSettings:

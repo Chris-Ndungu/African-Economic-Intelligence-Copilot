@@ -60,6 +60,7 @@ __all__ = [
     "InvestigationType",
     "InvestigationUpdate",
     "LLMUsage",
+    "Meta",
     "PeriodRange",
     "Selection",
     "ServiceName",
@@ -81,6 +82,14 @@ class _Body(BaseModel):
 
 class Health(_Body):
     status: Literal["ok"]
+
+
+class Meta(_Body):
+    """What the app is serving, as returned by ``GET /api/meta``."""
+
+    data_mode: Literal["demo", "live", "unknown"]
+    snapshot_date: date | None
+    gemini_configured: bool
 
 
 ServiceName = Literal["gemini", "data_service", "database"]

@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from copilot_core.error_messages import error_message, unsupported_message
 from copilot_core.figures import ChartView, build_chart
 from copilot_core.history import (
     investigation_question,
@@ -120,6 +121,7 @@ class ResultsView:
     unfinished: bool = False
     summary: str | None = None
     unsupported_reason: str | None = None
+    unsupported_text: str | None = None
     facts: list[FindingCard] = field(default_factory=list)
     unverified: list[FindingCard] = field(default_factory=list)
     hypotheses: list[FindingCard] = field(default_factory=list)
@@ -335,8 +337,8 @@ def build_results_view(investigation: Investigation) -> ResultsView:
         selection=selection,
     )
     if investigation.status == "failed":
-        message = investigation.error.message if investigation.error else None
-        return replace(view, error=message or "The investigation failed.")
+        code = investigation.error.code if investigation.error else None
+        return replace(view, error=error_message(code).text)
     result = investigation.result
     if result is None:
         return replace(view, unfinished=True)
@@ -364,6 +366,11 @@ def build_results_view(investigation: Investigation) -> ResultsView:
         view,
         summary=interpretation.summary if interpretation else None,
         unsupported_reason=interpretation.unsupported_reason if interpretation else None,
+        unsupported_text=(
+            unsupported_message(interpretation.unsupported_reason)
+            if interpretation and interpretation.unsupported_reason
+            else None
+        ),
         facts=facts,
         unverified=unverified,
         hypotheses=hypotheses,

@@ -27,7 +27,7 @@
   {% if view.summary %}<p class="summary">{{ view.summary }}</p>{% endif %}
   {% if not view.has_findings %}
   <div class="no-findings"><h3>No findings</h3>
-    {% if view.unsupported_reason %}<p>{{ view.unsupported_reason }}</p>{% endif %}
+    {% if view.unsupported_text %}<p class="message" data-error="unsupported_question">{{ view.unsupported_text }}</p>{% endif %}
     {% for c in view.caveats %}<p class="caveat">{{ c }}</p>{% endfor %}
     {% for g in view.data_gaps %}<p class="caveat">{{ g }}</p>{% endfor %}
   </div>

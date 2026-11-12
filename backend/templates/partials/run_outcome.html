@@ -5,7 +5,7 @@
 </div>
 {% elif kind == "failed" %}
 <div class="run-ended run-failed" data-outcome="failed" data-code="{{ code }}" role="alert">
-  <p class="message">{{ message }}</p>
+  <p class="message">{{ error_message(code).text }}</p>
   <button class="button" type="button" hx-post="/partials/investigations/{{ investigation_id }}/retry" hx-target="#results" hx-swap="outerHTML">Try again</button>
 </div>
 {% elif kind == "in_progress" %}

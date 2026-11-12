@@ -57,6 +57,33 @@ paths:
                   value:
                     status: ok
 
+  /api/meta:
+    get:
+      tags: [health]
+      operationId: getMeta
+      summary: Data mode and Gemini configuration
+      description: >-
+        Reports which data the app is serving, so a client can label it:
+        `demo` (the bundled sample snapshot, with its `snapshot_date`), `live`,
+        or `unknown` when the mode cannot be determined, for example because
+        the snapshot date cannot be read. It never reports `live` by assumption.
+        It also says whether Gemini is configured. It does not call Gemini,
+        Postgres or BigQuery.
+      responses:
+        "200":
+          description: The data mode, the demo snapshot date and whether Gemini is configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+              examples:
+                demo:
+                  summary: Demo mode
+                  value:
+                    data_mode: demo
+                    snapshot_date: "2026-11-11"
+                    gemini_configured: true
+
   /api/countries:
     get:
       tags: [reference]
@@ -969,6 +996,26 @@ components:
         status:
           type: string
           enum: [ok]
+
+    Meta:
+      type: object
+      description: What the app is serving, as returned by `GET /api/meta`.
+      required: [data_mode, snapshot_date, gemini_configured]
+      properties:
+        data_mode:
+          type: string
+          enum: [demo, live, unknown]
+          description: >-
+            `demo` is the bundled sample snapshot, `live` is curated BigQuery
+            data, `unknown` means the mode could not be determined. A client
+            must label `unknown` as unknown, never as live.
+        snapshot_date:
+          type: [string, "null"]
+          format: date
+          description: The date of the demo snapshot, or `null` when not in demo mode or unreadable.
+        gemini_configured:
+          type: boolean
+          description: Whether a Gemini API key is set, so runs can start.
 
     DataMode:
       type: string

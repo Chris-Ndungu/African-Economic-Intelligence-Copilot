@@ -12,6 +12,8 @@ against it rather than against the other's code.
 It defines:
 
 - `GET /health`, the liveness check built in #8
+- `GET /api/meta`, the data mode, the demo snapshot date and whether Gemini is
+  configured (#31)
 - Reference data: `GET /api/countries`, `GET /api/indicators` and
   `GET /api/coverage`
 - Investigations: `POST /api/investigations/run` to run one,
