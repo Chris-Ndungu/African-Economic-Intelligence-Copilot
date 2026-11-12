@@ -68,7 +68,6 @@ def test_commands_and_rules_keep_their_original_lines():
 def test_placeholders_name_the_issue_that_fills_them():
     expected = {
         "architecture.md": "#54",
-        "data-contract.md": "#5 and #6",
     }
     for name, issue in expected.items():
         text = (DOCS / name).read_text(encoding="utf-8")
@@ -351,3 +350,57 @@ def test_data_contract_tables_are_well_formed():
     for table in tables:
         widths = {len(re.sub(r"`[^`]*`", "", row).strip().strip("|").split("|")) for row in table}
         assert len(widths) == 1, table[0]
+
+
+def coverage_section() -> str:
+    text = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    return text[text.index("\n## Coverage") :]
+
+
+def test_data_contract_has_no_placeholder_once_coverage_is_written():
+    text = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    assert "Filled in by" not in text
+
+
+def test_coverage_section_has_the_required_subsections():
+    section = coverage_section()
+    for heading in (
+        "### How to reproduce",
+        "### Rules",
+        "### How `is_forecast` is set",
+        "### Coverage by indicator",
+        "### IMF forecast years",
+        "### Exchange rates",
+        "### Known gaps",
+        "### Inconsistencies",
+        "### Source preference",
+        "### Supported indicators",
+    ):
+        assert heading in section, heading
+    assert "2026-11-11" in section
+    assert "e61e67a" in section
+    assert "_docs/coverage.py <csv-dir>" in section
+
+
+def test_coverage_matrix_has_every_country_and_indicator():
+    import csv
+
+    rows = list(csv.DictReader((DOCS / "coverage.csv").open(encoding="utf-8")))
+    assert len(rows) == 54
+    assert len(rows[0]) == 2 + 24
+
+
+def test_every_indicator_is_supported_or_explained():
+    section = coverage_section()
+    supported = section[section.index("### Supported indicators") :]
+    table = (DOCS / "data-contract.md").read_text(encoding="utf-8")
+    codes = set(re.findall(r"^\| `([A-Z][A-Z0-9_.]+)` \| (?:IMF|World Bank) \|", table, re.M))
+    assert len(codes) == 24
+    for code in codes:
+        assert f"| `{code}` |" in supported, code
+
+
+def test_inflation_codes_use_the_imf_meaning():
+    section = coverage_section()
+    assert "**`PCPIPCH` is annual-average inflation and `PCPIEPCH` is\n   end-of-period inflation.**" in section
+    assert "gross\n   savings as a percent of GDP" in section
