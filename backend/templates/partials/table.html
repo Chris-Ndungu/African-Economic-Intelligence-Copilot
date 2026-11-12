@@ -1,0 +1,29 @@
+{% if view.table %}
+<table class="data-table" data-sortable>
+  <caption>{{ view.title }}: values by period</caption>
+  <thead>
+    <tr>
+      <th scope="col" aria-sort="none">Period</th>
+      {% for label, unit in view.table.columns %}
+      <th scope="col" aria-sort="none">{{ label }} ({{ unit }})</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in view.table.rows %}
+    <tr>
+      <th scope="row" data-sort-value="{{ row.period }}">{{ row.period }}</th>
+      {% for cell in row.cells %}
+      {% if cell.value is none %}
+      <td class="missing" data-sort-value="" aria-label="missing">{{ cell.value|number(cell.unit) }}</td>
+      {% else %}
+      <td data-sort-value="{{ cell.value }}">{{ cell.value|number(cell.unit) }}</td>
+      {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% elif view.empty %}
+<p class="chart-empty">No values to show for this selection.</p>
+{% endif %}

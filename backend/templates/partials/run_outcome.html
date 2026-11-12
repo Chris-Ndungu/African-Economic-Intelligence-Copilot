@@ -1,0 +1,23 @@
+{% if kind == "saved" %}
+<div class="run-ended run-saved" data-outcome="saved" hx-get="/investigations/{{ investigation_id }}" hx-trigger="load" hx-target="#workspace" hx-push-url="true">
+  <p class="message">Saved. Loading the results…</p>
+  <p><a href="/investigations/{{ investigation_id }}">Open the results</a></p>
+</div>
+{% elif kind == "failed" %}
+<div class="run-ended run-failed" data-outcome="failed" data-code="{{ code }}" role="alert">
+  <p class="message">{{ error_message(code).text }}</p>
+  <button class="button" type="button" hx-post="/partials/investigations/{{ investigation_id }}/retry" hx-target="#results" hx-swap="outerHTML">Try again</button>
+</div>
+{% elif kind == "in_progress" %}
+<div class="run-ended" data-outcome="in_progress">
+  <p class="message">This investigation is already running in another window. It will appear in the history when it ends.</p>
+</div>
+{% elif kind == "not_found" %}
+<div class="run-ended" data-outcome="not_found" role="alert">
+  <p class="message">This investigation was not found.</p>
+</div>
+{% else %}
+<div class="run-ended" data-outcome="unavailable" role="alert">
+  <p class="message">The investigation could not be loaded because the database is unavailable.</p>
+</div>
+{% endif %}

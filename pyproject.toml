@@ -10,11 +10,14 @@ dependencies = [
     "fastapi>=0.162.1",
     "google-genai>=3.2.0",
     "jinja2>=3.1.6",
+    "kaleido>=1.5.0",
+    "plotly>=7.1.0",
     "psycopg[binary]>=3.3.8",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "sqlalchemy>=2.1.8",
     "uvicorn>=0.54.0",
+    "weasyprint>=70.0",
 ]
 
 [dependency-groups]
@@ -23,7 +26,9 @@ dev = [
     "hypothesis>=6.170.15",
     "mypy>=2.4.1",
     "openapi-spec-validator>=0.9.0",
+    "pypdf>=7.0.1",
     "pytest>=9.2.0",
+    "pytest-playwright>=0.10.0",
     "ruff>=0.17.4",
 ]
 
@@ -32,7 +37,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Show why tests were skipped, so skipped database tests are never mistaken
 # for passed ones.
-addopts = "-rs"
+addopts = "-rs --tracing=retain-on-failure --screenshot=only-on-failure --output=test-results"
+markers = [
+    "e2e: end-to-end browser tests (Playwright); they need Docker or E2E_BASE_URL",
+]
 
 [tool.ruff]
 line-length = 100
@@ -50,3 +58,8 @@ files = ["copilot_core", "backend"]
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+# These libraries ship no type information.
+[[tool.mypy.overrides]]
+module = ["plotly", "plotly.*", "weasyprint", "weasyprint.*"]
+ignore_missing_imports = true

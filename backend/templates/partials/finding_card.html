@@ -1,0 +1,56 @@
+<article class="finding-card{% if card.hypothesis %} is-hypothesis{% endif %}{% if card.unverified %} is-unverified{% endif %}" id="finding-{{ card.id }}">
+  <p class="labels">
+    {% if card.hypothesis %}<span class="label label-hypothesis">Hypothesis</span>
+    {% elif not card.unverified %}<span class="label label-fact">Observed fact</span>{% endif %}
+    {% if card.unverified %}<span class="label label-unverified">Unverified</span>{% endif %}
+    <span class="kind">{{ card.kind }}</span>
+  </p>
+  <p class="statement">{{ card.statement }}</p>
+  {% if card.unverified %}
+  <div class="unverified-reasons" role="note">
+    <p>This claim was not confirmed against the computed results. Reasons:</p>
+    <ul>{% for reason in card.unverified_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if card.numbers %}
+  <dl class="numbers">
+    {% for n in card.numbers %}
+    <dt>{{ n.label or "Value" }}</dt>
+    <dd>{{ n.value|number(n.unit) }}{% if n.value is not none %} {{ n.unit }}{% endif %}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+  {% if card.relationship %}<p class="association">Association does not show cause</p>{% endif %}
+  {% if card.methods %}
+  <div class="method"><h4>Method</h4>
+    {% for m in card.methods %}
+    <p><strong>{{ m.name }}</strong>: {{ m.description }}</p>
+    {% if m.parameters %}
+    <ul class="parameters">{% for key, value in m.parameters %}<li>{{ key }}: {{ value }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if card.sources %}
+  <details class="sources">
+    <summary>Sources ({{ card.sources|length }})</summary>
+    <ul>
+      {% for s in card.sources %}
+      <li>Curated model: {{ s.id }}; original source: {{ s.name }}{% if s.provider %} ({{ s.provider }}){% endif %};
+        last updated: {% if s.last_updated %}{{ s.last_updated.isoformat() }}{% else %}unknown{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  {% if card.missing_notes %}
+  <div class="missing-notes"><h4>Missing data</h4>
+    <ul>{% for note in card.missing_notes %}<li>{{ note }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if card.caveats %}
+  <div class="caveats-block"><h4>Caveats</h4>
+    <ul>{% for c in card.caveats %}<li>{{ c }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if card.chart_ids %}
+  <p class="chart-links">{% for cid in card.chart_ids %}<a href="#chart-{{ cid }}">Show chart{% if card.chart_ids|length > 1 %} {{ loop.index }}{% endif %}</a> {% endfor %}</p>
+  {% endif %}
+</article>

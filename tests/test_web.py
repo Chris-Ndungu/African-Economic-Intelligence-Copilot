@@ -111,11 +111,13 @@ def test_workspace_has_header_sidebar_and_main(client):
     assert "New investigation" in text(header)
 
     sidebar = page.find("aside", aria_label="Selection")
-    for label in ("Country", "Indicator", "From", "To", "Show trend"):
+    for label in ("Countries", "Indicator", "From", "To"):
         assert label in text(sidebar)
 
     main = page.find("main", aria_label="Workspace")
-    assert "Demo mode: sample data snapshot, not live data." in text(main)
+    assert "Sample data from 2026-11-11. Not live economic data." in text(
+        page.find("div", id=None, **{"data-mode": "demo"})
+    )
     assert "Ask a question or pick a selection to start an investigation." in text(main)
 
 
@@ -193,7 +195,8 @@ def test_rendered_settings_are_escaped():
     assert payload not in response.text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
     assert text(page.find("h1")) == payload
-    assert not [s for s in page.find_all("script") if not s.attrs.get("src")]
+    inline = [s for s in page.find_all("script") if not s.attrs.get("src")]
+    assert all(s.attrs.get("type") == "application/json" for s in inline)  # data, not code
 
 
 def test_unknown_static_file_returns_404(client):

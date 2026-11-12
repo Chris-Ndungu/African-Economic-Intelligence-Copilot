@@ -13,11 +13,17 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic.json_schema import SkipJsonSchema
 
-from backend.dependencies import get_data_service, get_investigation_service, get_repository
+from backend.dependencies import (
+    get_app_meta,
+    get_data_service,
+    get_investigation_service,
+    get_repository,
+)
 from backend.errors import RunFailedError, json_responses, responses
 from copilot_core.data import DataService
 from copilot_core.events import Heartbeat, ProgressEvent
 from copilot_core.models import CountryCode, IndicatorCode
+from copilot_core.report import render_report_pdf, report_filename
 from copilot_core.repository import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, InvestigationRepository
 from copilot_core.runs import InvestigationService
 from copilot_core.schemas import (
@@ -30,6 +36,7 @@ from copilot_core.schemas import (
     InvestigationRunAccepted,
     InvestigationRunRequest,
     InvestigationUpdate,
+    Meta,
 )
 
 DATA_MODE = "demo"  # Live mode on BigQuery arrives with #49.
@@ -43,6 +50,10 @@ Repository = Annotated[InvestigationRepository, Depends(get_repository)]
 def service(request: Request) -> InvestigationService:
     """The run service, built after the body is validated so `422` comes before `503`."""
     return get_investigation_service(request)
+
+
+class PdfResponse(Response):
+    media_type = "application/pdf"
 
 
 class EventStreamResponse(StreamingResponse):
@@ -69,6 +80,12 @@ async def server_sent_events(
             continue
         number += 1
         yield f"id: {number}\nevent: {event.event}\ndata: {event.model_dump_json()}\n\n"
+
+
+@router.get("/meta", tags=["health"], operation_id="getMeta")
+def get_meta(request: Request) -> Meta:
+    """The data mode, the demo snapshot date and whether Gemini is configured."""
+    return get_app_meta(request)
 
 
 @router.get(
@@ -198,6 +215,41 @@ async def stream_investigation_events(
 def get_investigation(investigation_id: uuid.UUID, repository: Repository) -> Investigation:
     """Returns a saved investigation with its request and result."""
     return repository.get(investigation_id)
+
+
+@router.get(
+    "/investigations/{investigation_id}/report",
+    tags=["investigations"],
+    operation_id="exportInvestigationPdf",
+    response_class=PdfResponse,
+    responses={
+        200: {
+            "description": "The PDF report.",
+            "content": {"application/pdf": {"schema": {"type": "string"}}},
+            "headers": {
+                "X-Data-Mode": {"schema": {"type": "string"}},
+                "Content-Disposition": {"schema": {"type": "string"}},
+            },
+        },
+        **json_responses(404, 409, 422, 500, 503),
+    },
+)
+def export_investigation_pdf(
+    investigation_id: uuid.UUID, request: Request, repository: Repository
+) -> Response:
+    """Renders a saved, succeeded investigation as PDF without calling Gemini."""
+    investigation = repository.get(investigation_id)
+    pdf = render_report_pdf(
+        investigation,
+        snapshot_date=get_app_meta(request).snapshot_date,
+    )
+    return PdfResponse(
+        pdf,
+        headers={
+            "Content-Disposition": f'attachment; filename="{report_filename(investigation)}"',
+            "X-Data-Mode": investigation.data_mode,
+        },
+    )
 
 
 @router.patch(

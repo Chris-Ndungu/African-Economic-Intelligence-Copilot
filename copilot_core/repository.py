@@ -166,7 +166,9 @@ class InvestigationRepository:
         except DBAPIError as exc:
             if exc.connection_invalidated:
                 raise DatabaseUnavailableError("The investigation database is unavailable") from exc
-            raise
+            # For example a missing table: the page must say the history cannot be read,
+            # not fail with a 500.
+            raise RepositoryError("The investigation database could not be read") from exc
 
     @staticmethod
     def _apply_result(record: InvestigationRecord, result: InvestigationResult) -> None:

@@ -44,9 +44,7 @@ ROOT = Path(__file__).resolve().parent.parent
 METHODS = ("get", "post", "put", "patch", "delete")
 
 # Operations in the contract that later issues implement.
-NOT_YET_IMPLEMENTED = {
-    ("GET", "/api/investigations/{investigation_id}/report"): "#32",
-}
+NOT_YET_IMPLEMENTED: dict[tuple[str, str], str] = {}
 
 
 def contract() -> dict[str, Any]:

@@ -26,8 +26,8 @@ def client():
 
 def test_workspace_offers_countries_and_supported_indicators(client):
     page = client.get("/").text
-    assert '<option value="TZA"' in page
-    assert '<option value="PCPIPCH">' in page
+    assert 'id="country-TZA"' in page
+    assert '<option value="PCPIPCH"' in page
     assert "NY.GDP.MKTP.CD" not in page
 
 

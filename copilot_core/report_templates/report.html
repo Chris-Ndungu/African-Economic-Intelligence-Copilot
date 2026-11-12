@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en" data-banner="{{ report.banner }}">
+<head>
+<meta charset="utf-8">
+<title>{{ v.heading }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 28mm 18mm 22mm 18mm;
+    @top-center {
+      content: string(banner);
+      font: bold 9pt sans-serif;
+      color: #1f2328;
+      border-bottom: 0.5pt solid #888;
+      padding-bottom: 2mm;
+    }
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font: 9pt sans-serif;
+      color: #444;
+    }
+  }
+  html { string-set: banner attr(data-banner); font: 10pt/1.45 sans-serif; color: #1f2328; }
+  h1 { font-size: 18pt; margin: 0 0 4pt; }
+  h2 { font-size: 13pt; margin: 18pt 0 6pt; border-bottom: 0.5pt solid #bbb; break-after: avoid; }
+  h3 { font-size: 11pt; margin: 12pt 0 4pt; break-after: avoid; }
+  h4 { font-size: 10pt; margin: 6pt 0 2pt; }
+  dl.facts { margin: 6pt 0; overflow: hidden; }
+  dl.facts dt { float: left; clear: left; width: 30mm; font-weight: bold; }
+  dl.facts dd { margin: 0 0 2pt 32mm; }
+  .question { font-size: 11pt; margin: 6pt 0; }
+  article { border: 0.5pt solid #bbb; padding: 6pt 8pt; margin: 6pt 0; break-inside: avoid; }
+  article.hypothesis { border-style: dashed; }
+  .label { font-weight: bold; border: 0.5pt solid #444; padding: 0 4pt; margin-right: 4pt; font-size: 8.5pt; }
+  .label-unverified { text-decoration: underline; }
+  .statement { margin: 4pt 0; }
+  ul { margin: 2pt 0 2pt 14pt; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 10pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 0.5pt solid #888; padding: 2pt 5pt; text-align: right; font-size: 9pt; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { background: #eee; }
+  caption { text-align: left; font-weight: bold; padding: 2pt 0; caption-side: top; }
+  figure { margin: 6pt 0; break-inside: avoid; }
+  figure img { width: 100%; }
+  figcaption, .chart-source, .chart-note { font-size: 8.5pt; color: #444; }
+  .chart-failed { border: 0.5pt dashed #888; padding: 10pt; text-align: center; }
+</style>
+</head>
+<body>
+{% macro chart_figure(chart) %}
+<figure>
+  <figcaption><strong>{{ chart.view.title }}</strong></figcaption>
+  {% if chart.image %}
+  <img src="{{ chart.image }}" alt="{{ chart.view.title }}">
+  <p class="chart-note">{{ chart.view.gap_note }}</p>
+  {% elif chart.failed %}
+  <p class="chart-failed">Chart could not be rendered</p>
+  {% elif chart.view.error %}
+  <p class="chart-failed">{{ chart.view.error }}</p>
+  {% elif chart.view.empty %}
+  <p class="chart-failed">No values to show for this selection.</p>
+  {% endif %}
+  {% if chart.view.sources %}<p class="chart-source">Source: {{ chart.view.sources|join(", ") }}</p>{% endif %}
+</figure>
+{% endmacro %}
+
+{% macro card_block(card) %}
+<article class="{% if card.hypothesis %}hypothesis{% endif %}">
+  <p class="labels">
+    {% if card.hypothesis %}<span class="label label-hypothesis">Hypothesis</span>
+    {% else %}<span class="label label-fact">Observed fact</span>{% endif %}
+    {% if card.unverified %}<span class="label label-unverified">Unverified</span>{% endif %}
+    <span class="kind">{{ card.kind }}</span>
+  </p>
+  <p class="statement">{{ card.statement }}</p>
+  {% if card.unverified %}
+  <div>
+    <p>This claim was not confirmed against the computed results. Reasons:</p>
+    <ul>{% for reason in card.unverified_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if card.numbers %}
+  <dl class="facts">
+    {% for n in card.numbers %}
+    <dt>{{ n.label or "Value" }}</dt>
+    <dd>{{ n.value|number(n.unit) }}{% if n.value is not none %} {{ n.unit }}{% endif %}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+  {% if card.relationship %}<p><em>Association does not show cause</em></p>{% endif %}
+  {% if card.missing_notes %}
+  <h4>Missing data</h4>
+  <ul>{% for note in card.missing_notes %}<li>{{ note }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if card.caveats %}
+  <h4>Caveats</h4>
+  <ul>{% for c in card.caveats %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% for chart in report.placed.get(card.id, []) %}{{ chart_figure(chart) }}{% endfor %}
+</article>
+{% endmacro %}
+
+<h1>{{ report.title }}</h1>
+<p class="question"><strong>{% if v.question %}Question:{% else %}Selection:{% endif %}</strong> {{ v.heading }}</p>
+<dl class="facts">
+  <dt>Data mode</dt><dd>{{ v.data_mode_label }}</dd>
+  <dt>Countries</dt><dd>{% if v.countries %}{{ v.countries|join(", ") }}{% else %}Not recorded{% endif %}</dd>
+  <dt>Indicator</dt><dd>{% if v.indicators %}{{ v.indicators|join(", ") }}{% else %}Not recorded{% endif %}</dd>
+  <dt>Period</dt><dd>{% if v.period %}{{ v.period }}{% else %}Not recorded{% endif %}</dd>
+</dl>
+
+<h2>Summary</h2>
+{% if v.summary %}<p class="summary">{{ v.summary }}</p>{% else %}<p>No summary was stored for this investigation.</p>{% endif %}
+{% if v.unsupported_text %}<p>{{ v.unsupported_text }}</p>{% endif %}
+
+<h2>Findings</h2>
+{% if not v.has_findings %}<p>No findings.</p>{% endif %}
+{% if v.facts %}<h3>Observed facts</h3>
+{% for card in v.facts %}{{ card_block(card) }}{% endfor %}{% endif %}
+{% if v.unverified %}<h3>Unverified claims</h3>
+{% for card in v.unverified %}{{ card_block(card) }}{% endfor %}{% endif %}
+{% if v.hypotheses %}<h3>Possible explanations</h3>
+{% for card in v.hypotheses %}{{ card_block(card) }}{% endfor %}{% endif %}
+{% if report.unplaced %}<h3>Charts</h3>
+{% for chart in report.unplaced %}{{ chart_figure(chart) }}{% endfor %}{% endif %}
+
+<h2>Data tables</h2>
+{% for chart in report.charts.values() %}
+{% set table = chart.view.table %}
+{% if table %}
+<table>
+  <caption>{{ chart.view.title }}: values by period</caption>
+  <thead>
+    <tr>
+      <th scope="col">Period</th>
+      {% for label, unit in table.columns %}<th scope="col">{{ label }} ({{ unit }})</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in table.rows %}
+    <tr>
+      <th scope="row">{{ row.period }}</th>
+      {% for cell in row.cells %}<td>{{ cell.value|number(cell.unit) }}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>{{ chart.view.title }}: no values to show.</p>
+{% endif %}
+{% else %}
+<p>No data tables.</p>
+{% endfor %}
+
+<h2>Methodology and parameters</h2>
+{% for m in report.methods %}
+<p><strong>{{ m.name }}</strong>: {{ m.description }}</p>
+{% if m.parameters %}<ul>{% for key, value in m.parameters %}<li>{{ key }}: {{ value }}</li>{% endfor %}</ul>{% endif %}
+{% else %}
+<p>No methods were recorded.</p>
+{% endfor %}
+
+<h2>Sources</h2>
+{% if report.sources %}
+<ul>
+  {% for s in report.sources %}
+  <li>Curated model: {{ s.id }}; original source: {{ s.name }}{% if s.provider %} ({{ s.provider }}){% endif %}{% if s.url %}, {{ s.url }}{% endif %};
+    last updated: {% if s.last_updated %}{{ s.last_updated.isoformat() }}{% else %}unknown{% endif %}</li>
+  {% endfor %}
+</ul>
+{% else %}<p>No sources were recorded.</p>{% endif %}
+
+<h2>Caveats and data gaps</h2>
+{% if v.caveats or v.data_gaps %}
+<ul>{% for c in v.caveats %}<li>{{ c }}</li>{% endfor %}{% for g in v.data_gaps %}<li>Data gap: {{ g }}</li>{% endfor %}</ul>
+{% else %}<p>None recorded.</p>{% endif %}
+
+<p>Report generated: {{ report.generated_text }}</p>
+</body>
+</html>

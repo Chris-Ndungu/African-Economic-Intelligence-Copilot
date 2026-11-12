@@ -138,7 +138,7 @@ Description: Render each stored `ChartSpec` with the same `copilot_core` figure 
 
 ## 34. Set up Playwright with the first end-to-end journey
 Goal: Run real-browser tests against the full local stack.
-Description: Set up Playwright for Python (pytest-playwright) in `tests/` to run against the Docker Compose stack configured with the stubbed Gemini client and demo data. Implement the "run an investigation from selections and see results" journey so that it runs with `uv run pytest` and in CI.
+Description: Set up Playwright for Python (pytest-playwright) in `tests/` to run against the Docker Compose stack configured with the stubbed Gemini client and demo data. Implement the "run an investigation from selections and see results" journey so that it runs with `uv run pytest -m e2e` and in CI; a plain `uv run pytest` skips it with a message.
 
 ## 35. Complete the end-to-end test suite
 Goal: Cover all key user journeys in a real browser.

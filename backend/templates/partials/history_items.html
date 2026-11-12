@@ -1,0 +1,13 @@
+{% for entry in history.entries %}
+<li class="history-item">
+  <a href="/investigations/{{ entry.id }}" hx-get="/investigations/{{ entry.id }}" hx-target="#workspace" hx-swap="innerHTML" hx-push-url="true"{% if active == entry.id|string %} aria-current="page"{% endif %}>
+    <span class="history-title">{{ entry.title }}</span>
+    <span class="history-meta">
+      <time class="local-time" datetime="{{ entry.created_iso }}">{{ entry.created_date }}</time>
+      <span class="status status-{{ entry.status }}"><span aria-hidden="true">{{ entry.status_icon }}</span> {{ entry.status_label }}</span>
+      <span class="data-mode data-mode-{{ entry.data_mode }}">{{ entry.data_mode_label }}</span>
+    </span>
+    {% if entry.error_title %}<span class="history-error">{{ entry.error_title }}</span>{% endif %}
+  </a>
+</li>
+{% endfor %}

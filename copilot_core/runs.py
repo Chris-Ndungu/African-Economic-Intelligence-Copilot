@@ -19,7 +19,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -182,7 +182,7 @@ class InvestigationService:
 
     async def stream(
         self, investigation: Investigation
-    ) -> AsyncIterator[ProgressEvent | Heartbeat]:
+    ) -> AsyncGenerator[ProgressEvent | Heartbeat]:
         """Run ``investigation`` if it is pending, yielding each event as it happens.
 
         A finished investigation yields only its final event; one another

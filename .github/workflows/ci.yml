@@ -60,5 +60,39 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy
 
-      - name: Test (pytest)
-        run: uv run pytest
+      - name: Test (pytest, without the end-to-end tests)
+        run: uv run pytest -m "not e2e"
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Install the browser
+        run: uv run playwright install --with-deps chromium
+
+      # The tests start the stack (stubbed Gemini, demo data, a fresh database)
+      # with docker compose and remove it afterwards.
+      - name: Test (pytest -m e2e)
+        run: uv run pytest -m e2e
+
+      - name: Upload traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

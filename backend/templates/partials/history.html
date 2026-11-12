@@ -1,0 +1,15 @@
+<section id="history" class="history" aria-label="Investigation history" hx-get="/partials/history" hx-trigger="investigation-saved from:body" hx-swap="outerHTML">
+  <h2>History</h2>
+{% if history.error %}
+  <div class="panel-error" role="alert">
+    <p class="message">{{ history.error }}</p>
+    <button class="button" type="button" hx-get="/partials/history" hx-target="#history" hx-swap="outerHTML">Retry</button>
+  </div>
+{% elif not history.entries %}
+  <p class="placeholder">No investigations yet</p>
+  <p class="hint">Pick an indicator, countries and a period, or ask a question, to start one.</p>
+{% else %}
+  <ul id="history-list" class="history-list">{% include "partials/history_items.html" %}</ul>
+  {% include "partials/history_more.html" %}
+{% endif %}
+</section>

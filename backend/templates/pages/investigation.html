@@ -1,0 +1,5 @@
+{% extends "pages/workspace.html" %}
+
+{% block title %}{% if state == "found" %}{{ title }}{% else %}Not found{% endif %} - {{ request.app.state.settings.app_name }}{% endblock %}
+
+{% block main %}{% include "partials/investigation_panel.html" %}{% endblock %}

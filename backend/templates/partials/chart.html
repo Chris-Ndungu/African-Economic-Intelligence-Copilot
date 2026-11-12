@@ -1,0 +1,18 @@
+<figure class="chart-figure">
+  <figcaption class="chart-title">{{ view.title }}</figcaption>
+{% if view.error %}
+  <p class="message" role="alert">{{ view.error }}</p>
+{% elif view.empty %}
+  <div class="chart-empty">
+    <p>No values to show for this selection.</p>
+    {% if view.caveats %}<ul class="caveats">{% for caveat in view.caveats %}<li>{{ caveat }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+{% else %}
+  <div class="plotly-chart" role="img" aria-label="{{ view.title }}"></div>
+  <script type="application/json" class="chart-data">{{ view.figure|tojson }}</script>
+  <p class="chart-note">{{ view.gap_note }}</p>
+{% endif %}
+{% if view.sources %}
+  <p class="chart-source">Source: {{ view.sources|join(", ") }}</p>
+{% endif %}
+</figure>

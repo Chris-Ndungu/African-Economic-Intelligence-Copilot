@@ -1,0 +1,15 @@
+{% set meta = page_meta(request) %}
+{% set ready = meta.gemini_configured and ((question|trim) or (panel and panel.selection)) %}
+<form id="run-form" class="run-form" hx-post="/partials/investigations/run" hx-include="#selection-form"
+      hx-target="#results" hx-swap="outerHTML" hx-disabled-elt="#run-button" hx-sync="this:drop">
+  <label for="question">Ask a question</label>
+  <textarea id="question" name="question" rows="3" maxlength="{{ max_question_length }}"
+            placeholder="For example: How did inflation change in Kenya and Nigeria from 2015 to 2023?"
+            aria-describedby="question-count run-hint">{{ question }}</textarea>
+  <p id="question-count" class="hint">{{ question|length }} / {{ max_question_text }} characters</p>
+  <p id="run-hint" class="hint run-hint" role="status"{% if hint %} data-sticky="true"{% elif ready %} hidden{% endif %}>{{ hint or "Type a question, or choose an indicator, countries and a period, to run." }}</p>
+  {% if not meta.gemini_configured %}
+  <p class="message" role="alert" data-error="gemini_not_configured">{{ error_message("gemini_not_configured").text }}</p>
+  {% endif %}
+  <button id="run-button" class="button" type="submit"{% if not meta.gemini_configured %} data-unavailable="gemini_not_configured"{% endif %}{% if not ready %} disabled{% endif %}>Run investigation</button>
+</form>
