@@ -1,0 +1,9 @@
+{
+  "description": "Safety filters block the reply.",
+  "responses": [
+    {
+      "error": "LLMBlocked",
+      "message": "Gemini blocked the reply: SAFETY"
+    }
+  ]
+}

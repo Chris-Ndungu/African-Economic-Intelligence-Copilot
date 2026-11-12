@@ -1,0 +1,25 @@
+{
+  "description": "A comparison over too many data points.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "compare_countries",
+          "args": {
+            "countries": [
+              "KEN",
+              "NGA",
+              "GHA"
+            ],
+            "indicator": "PCPIPCH",
+            "start": "1990",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    }
+  ]
+}

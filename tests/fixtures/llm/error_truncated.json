@@ -1,0 +1,9 @@
+{
+  "description": "The reply hits the output token limit.",
+  "responses": [
+    {
+      "error": "LLMTruncated",
+      "message": "Gemini's reply hit the output token limit"
+    }
+  ]
+}

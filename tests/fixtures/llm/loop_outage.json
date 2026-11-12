@@ -1,0 +1,22 @@
+{
+  "description": "Gemini goes down after the first tool round.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "KEN",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "error": "LLMUnavailable",
+      "message": "Gemini returned 503: unavailable"
+    }
+  ]
+}

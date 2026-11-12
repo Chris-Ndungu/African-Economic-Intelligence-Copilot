@@ -1,0 +1,57 @@
+{
+  "description": "Gemini keeps calling tools past the step limit.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "KEN",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "NGA",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "GHA",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "TZA",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "description": "Arguments that fail validation.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "Kenya",
+            "indicator": "PCPIPCH",
+            "start": "2015"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "Gemini blocks the final interpretation.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "KEN",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    },
+    {
+      "error": "LLMBlocked",
+      "message": "Gemini blocked the reply: SAFETY"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "description": "A reply that is not JSON.",
+  "responses": [
+    {
+      "text": "Kenya's inflation rose. {not json"
+    }
+  ]
+}

@@ -2,11 +2,10 @@ openapi: 3.1.0
 info:
   title: African Economic Intelligence Copilot API
   version: 0.1.0
-  summary: Contract between the React workspace and the FastAPI backend.
+  summary: Contract between the investigation workspace and the FastAPI backend.
   description: |
     The OpenAPI contract for the investigation workspace. It changes before
-    the API behavior does; frontend types are generated from it with
-    `openapi-typescript` (see `_docs/api.md`).
+    the API behavior does (see `_docs/api.md`).
 
     Conventions used by every operation:
 
@@ -184,44 +183,128 @@ paths:
     post:
       tags: [investigations]
       operationId: runInvestigation
-      summary: Run an investigation
+      summary: Run an investigation and save it
       description: >-
-        Computes the requested analysis in Python and asks Gemini to
-        interpret the computed results. The result is not saved; save it with
-        `saveInvestigation`. If Gemini or the data service is unavailable the
-        call fails with `503` rather than returning an uninterpreted or
-        fabricated answer.
+        Runs a whole investigation inside the request and returns the saved
+        investigation: Gemini calls the approved analysis tools, interprets
+        the computed results, every number in the interpretation is checked
+        against the tool results, and the investigation is saved. Send a
+        `question`, a `selection` or both; with both, the selection limits
+        what the tools may query. A selection alone runs the question
+        "Describe the trend in <indicator> for <countries> from <start> to
+        <end>". The run is saved as `failed`, never as a success, when
+        Gemini, the data service or the time limit fails it; the response
+        is then `503` naming the service, `422` when the step limit was
+        reached, or `500`. An unsupported question is saved as `succeeded`
+        with `interpretation.unsupported_reason` set and no findings.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InvestigationRequest"
+              $ref: "#/components/schemas/InvestigationRunRequest"
             examples:
-              anomaly:
-                summary: Investigate Kenya inflation for anomalies
+              question:
+                summary: A question with a selection
                 value:
                   question: Why did inflation in Kenya rise in 2022?
-                  investigation_type: anomaly
-                  countries: [KEN, NGA]
-                  indicators: [PCPIPCH]
-                  period:
-                    start: "2018"
+                  selection:
+                    countries: [KEN]
+                    indicator: PCPIPCH
+                    start: "2015"
                     end: "2023"
-                  parameters:
-                    baseline_periods: 4
-                    anomaly_method: z_score
-                    anomaly_threshold: 2
       responses:
         "200":
-          description: The computed results and Gemini's interpretation of them.
+          description: The saved investigation, with status `succeeded`.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvestigationResult"
-              examples:
-                anomaly:
-                  $ref: "#/components/examples/InvestigationResultExample"
+                $ref: "#/components/schemas/Investigation"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations/runs:
+    post:
+      tags: [investigations]
+      operationId: createInvestigationRun
+      summary: Create an investigation run to stream
+      description: >-
+        Saves an investigation as `pending` without running it. Open
+        `GET /api/investigations/{investigation_id}/events` to run it and
+        receive its progress. The body and its `422` rules are the same as
+        `runInvestigation`. The question is sent in this body, never in a
+        URL, so it stays out of access logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvestigationRunRequest"
+      responses:
+        "202":
+          description: The investigation was created as `pending`; it has not started.
+          headers:
+            Location:
+              description: The URL of the event stream that runs the investigation.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestigationRunAccepted"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/investigations/{investigation_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/InvestigationId"
+    get:
+      tags: [investigations]
+      operationId: streamInvestigationEvents
+      summary: Run a pending investigation and stream its progress
+      description: >-
+        A server-sent event stream, readable with `EventSource`. Opening it
+        for a `pending` investigation claims and runs it inside this
+        response; each step is sent as it happens. Every event has an
+        increasing `id`, an `event:` name and a JSON `data:` payload whose
+        schema is named after the event (`started` uses
+        `StartedEvent`, and so on). The first event is `started` and the
+        last is exactly one `saved` or `failed`; the stream then closes.
+        For an investigation that already finished, only its final `saved`
+        or `failed` event is sent. For one that another connection is
+        running, a single `in_progress` event is sent. A `: ping` comment
+        is sent at least every 15 seconds while a step runs. Closing the
+        connection cancels the run, which is saved as `failed` with code
+        `client_disconnected`.
+      responses:
+        "200":
+          description: >-
+            The event stream. Event names: `started`, `fetching_data`,
+            `analysis_started`, `analysis_finished`, `interpreting`,
+            `validating`, `saved`, `failed` and `in_progress`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                id: 1
+                event: started
+                data: {"investigation_id": "7f9c2b1e-4d3a-4c5b-9e8f-1a2b3c4d5e6f"}
+
+                id: 2
+                event: fetching_data
+                data: {"tool": "analyze_trend"}
+
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -765,16 +848,50 @@ components:
                 iqr: null
         interpretation:
           summary: Kenya's inflation rose sharply in 2022, well above its recent baseline, though it stayed far below Nigeria's.
-          statements:
-            - text: The 2022 rise in Kenya's inflation is unusual relative to 2018-2021.
-              label: observation
-              finding_ids: [finding-1]
-            - text: The rise may reflect pressures shared across the region, since Nigeria's inflation was also high in 2022; the data shows association, not cause.
+          findings:
+            - statement: Kenya's inflation in 2022 was unusual relative to 2018-2021.
+              label: fact
+              result_ids: [r1]
+              numbers: []
+              verification: verified
+              reasons: []
+              checks:
+                - text: "2022"
+                  value: 2022
+                  result_id: r1
+                  field: null
+                  verified: true
+                  reason: null
+                - text: "2018"
+                  value: 2018
+                  result_id: r1
+                  field: null
+                  verified: true
+                  reason: null
+                - text: "2021"
+                  value: 2021
+                  result_id: r1
+                  field: null
+                  verified: true
+                  reason: null
+            - statement: The rise may reflect pressures shared across the region; the data shows association, not cause.
               label: hypothesis
-              finding_ids: [finding-1]
+              result_ids: [r1]
+              numbers: []
+              verification: verified
+              reasons: []
+              checks: []
           caveats:
             - Explanations are limited to the indicators in the data source.
-          model: gemini
+          data_gaps: []
+          unsupported_reason: null
+          summary_checks: []
+          verified_count: 3
+          unverified_count: 0
+          model: gemini-3.6-flash
+          prompt_version: interpret_v1
+        tool_results: []
+        charts: []
         sources:
           - id: fact_macroeconomic_indicators
             name: IMF DataMapper
@@ -824,12 +941,22 @@ components:
           anomalies: []
           interpretation:
             summary: The shortened example has no findings to interpret.
-            statements: []
+            findings: []
             caveats: []
-            model: gemini
+            data_gaps: []
+            unsupported_reason: null
+            summary_checks: []
+            verified_count: 0
+            unverified_count: 0
+            model: gemini-3.6-flash
+            prompt_version: interpret_v1
+          tool_results: []
+          charts: []
           sources: []
           caveats: []
           generated_at: "2026-11-07T10:15:00Z"
+        error: null
+        run: null
         created_at: "2026-11-07T10:15:00Z"
         updated_at: "2026-11-07T10:20:00Z"
 
@@ -859,7 +986,7 @@ components:
         code:
           type: string
           description: Machine-readable error code.
-          enum: [validation_error, not_found, service_unavailable, internal_error]
+          enum: [validation_error, not_found, step_limit_reached, service_unavailable, internal_error]
         message:
           type: string
           description: Human-readable explanation of the error.
@@ -867,7 +994,8 @@ components:
           type: [string, "null"]
           description: >-
             The service that failed, or `null` when the error is not caused by
-            an unavailable service. Set on every `503`.
+            an unavailable service. Set on every `503` except a run over its
+            time limit, which no single service caused.
           enum: [gemini, data_service, database, null]
         details:
           type: array
@@ -1431,39 +1559,172 @@ components:
           items:
             $ref: "#/components/schemas/AnomalyPoint"
 
-    InterpretationStatement:
+    CitedNumber:
       type: object
-      required: [text, label, finding_ids]
+      description: A number a finding uses, with the tool result field it comes from.
+      required: [value, unit, result_id, field]
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+        result_id:
+          type: string
+          description: The tool result the number comes from, for example `r1`.
+        field:
+          type: string
+          description: >-
+            Dotted path to the number in that result's `data`, with list
+            positions as numbers, for example `slope.value` or
+            `entries.0.value`.
+    NumberCheck:
+      type: object
+      description: >-
+        How one number was checked against the tool results. `text` is the
+        number as written, or the cited value for a cited number.
+      required: [text, value, result_id, field, verified, reason]
       properties:
         text:
+          type: string
+        value:
+          type: number
+        result_id:
+          type: [string, "null"]
+        field:
+          type: [string, "null"]
+        verified:
+          type: boolean
+        reason:
+          type: [string, "null"]
+          description: Why the number could not be traced, or `null` when it was verified.
+    InterpretationFinding:
+      type: object
+      description: One claim of the interpretation and the tool results it rests on.
+      required: [statement, label, result_ids, numbers, verification, checks, reasons]
+      properties:
+        statement:
           type: string
         label:
           type: string
           description: >-
-            `observation` restates computed findings; `hypothesis` is a
-            possible explanation the evidence supports but does not prove.
-          enum: [observation, hypothesis]
-        finding_ids:
+            `fact` restates computed results; `hypothesis` is a possible
+            explanation the evidence supports but does not prove.
+          enum: [fact, hypothesis]
+        result_ids:
           type: array
-          description: The findings the statement cites. Every numerical claim must cite at least one.
+          minItems: 1
+          items:
+            type: string
+        numbers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CitedNumber"
+        verification:
+          type: string
+          description: >-
+            `verified` when every number traces to a tool result and every
+            cited result exists. Unverified findings are kept and flagged.
+          enum: [verified, unverified]
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/NumberCheck"
+        reasons:
+          type: array
+          description: >-
+            Why the finding is unverified, for example `unknown result r9`
+            or `2.5 (not in any tool result)`; empty when it is verified.
           items:
             type: string
     Interpretation:
       type: object
-      description: Gemini's reading of the computed findings. It contains no numbers that are not in the cited findings.
-      required: [summary, statements, caveats, model]
+      description: >-
+        Gemini's structured reading of the tool results, after every number
+        in it was checked against them.
+      required:
+        - summary
+        - findings
+        - caveats
+        - data_gaps
+        - unsupported_reason
+        - summary_checks
+        - verified_count
+        - unverified_count
+        - model
+        - prompt_version
       properties:
         summary:
           type: string
-        statements:
+        findings:
+          type: array
+          description: Empty when the question is unsupported.
+          items:
+            $ref: "#/components/schemas/InterpretationFinding"
+        caveats:
           type: array
           items:
-            $ref: "#/components/schemas/InterpretationStatement"
-        caveats:
-          $ref: "#/components/schemas/Caveats"
+            type: string
+        data_gaps:
+          type: array
+          description: Missing data and stale series that limit the interpretation.
+          items:
+            type: string
+        unsupported_reason:
+          type: [string, "null"]
+          description: Why the question cannot be answered from the data, or `null`.
+        summary_checks:
+          type: array
+          description: The checks of the numbers in `summary`.
+          items:
+            $ref: "#/components/schemas/NumberCheck"
+        verified_count:
+          type: integer
+          minimum: 0
+        unverified_count:
+          type: integer
+          minimum: 0
         model:
           type: string
           description: The model that wrote the interpretation.
+        prompt_version:
+          type: string
+          description: The version of the interpretation prompt, for example `interpret_v1`.
+    ToolResult:
+      type: object
+      description: One successful tool call's result, which findings cite by `result_id`.
+      required: [result_id, tool, arguments, data]
+      properties:
+        result_id:
+          type: string
+        tool:
+          type: string
+        arguments:
+          type: object
+        data:
+          type: object
+          description: The analysis result model serialized to JSON.
+    ChartSpec:
+      type: object
+      description: >-
+        What to draw for one cited tool result. `line` draws `series_ids`;
+        `bar` draws a comparison's entries; `table` lists coverage.
+      required: [id, kind, title, result_id, unit, series_ids]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [line, bar, table]
+        title:
+          type: string
+        result_id:
+          type: string
+        unit:
+          type: [string, "null"]
+        series_ids:
+          type: array
+          items:
+            type: string
 
     AnalysisParameters:
       type: object
@@ -1527,6 +1788,8 @@ components:
         - baselines
         - anomalies
         - interpretation
+        - tool_results
+        - charts
         - sources
         - caveats
         - generated_at
@@ -1534,7 +1797,12 @@ components:
         data_mode:
           $ref: "#/components/schemas/DataMode"
         request:
-          $ref: "#/components/schemas/InvestigationRequest"
+          description: >-
+            The selection the results cover, or `null` for a run that called
+            no tool, such as an unsupported question.
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationRequest"
+            - type: "null"
         findings:
           type: array
           items:
@@ -1560,6 +1828,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Interpretation"
             - type: "null"
+        tool_results:
+          type: array
+          description: The results of a run's successful tool calls, in call order.
+          items:
+            $ref: "#/components/schemas/ToolResult"
+        charts:
+          type: array
+          description: One chart for each tool result a finding cites.
+          items:
+            $ref: "#/components/schemas/ChartSpec"
         sources:
           type: array
           description: Every source used by the results.
@@ -1609,8 +1887,11 @@ components:
           $ref: "#/components/schemas/InvestigationResult"
     Investigation:
       type: object
-      description: A saved investigation. `data_mode` is the mode its result was computed in.
-      required: [id, title, status, data_mode, request, result, created_at, updated_at]
+      description: >-
+        A saved investigation. `data_mode` is the mode it was computed in.
+        `request` and `result` are `null` until a run succeeds; a failed
+        run has `error` set and never has a result.
+      required: [id, title, status, data_mode, request, result, error, run, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1622,9 +1903,22 @@ components:
         data_mode:
           $ref: "#/components/schemas/DataMode"
         request:
-          $ref: "#/components/schemas/InvestigationRequest"
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationRequest"
+            - type: "null"
         result:
-          $ref: "#/components/schemas/InvestigationResult"
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationResult"
+            - type: "null"
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationError"
+            - type: "null"
+        run:
+          description: How a run went, or `null` for an investigation saved directly.
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationRun"
+            - type: "null"
         created_at:
           type: string
           format: date-time
@@ -1646,7 +1940,10 @@ components:
         data_mode:
           $ref: "#/components/schemas/DataMode"
         investigation_type:
-          $ref: "#/components/schemas/InvestigationType"
+          description: The type, or `null` while a run has not decided it.
+          oneOf:
+            - $ref: "#/components/schemas/InvestigationType"
+            - type: "null"
         countries:
           type: array
           items:
@@ -1680,3 +1977,233 @@ components:
         next_cursor:
           type: [string, "null"]
           description: Cursor for the next page, or `null` on the last page.
+
+    Selection:
+      type: object
+      description: Countries, one indicator and a period that limit what a run may query.
+      required: [countries, indicator, start, end]
+      properties:
+        countries:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/CountryCode"
+        indicator:
+          $ref: "#/components/schemas/IndicatorCode"
+        start:
+          $ref: "#/components/schemas/PeriodLabel"
+        end:
+          $ref: "#/components/schemas/PeriodLabel"
+    InvestigationRunRequest:
+      type: object
+      description: >-
+        A question, a selection or both; a request with neither is rejected
+        with `422`.
+      minProperties: 1
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        selection:
+          $ref: "#/components/schemas/Selection"
+    InvestigationRunAccepted:
+      type: object
+      required: [id, status, events_url]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending]
+        events_url:
+          type: string
+          description: The event stream that runs the investigation.
+    InvestigationErrorCode:
+      type: string
+      enum:
+        - gemini_not_configured
+        - gemini_unavailable
+        - gemini_timeout
+        - gemini_blocked
+        - gemini_truncated
+        - gemini_request_error
+        - interpretation_invalid
+        - data_unavailable
+        - timeout
+        - step_limit_reached
+        - interrupted
+        - not_started
+        - client_disconnected
+        - internal_error
+    InvestigationError:
+      type: object
+      description: Why a run failed.
+      required: [code, message, service]
+      properties:
+        code:
+          $ref: "#/components/schemas/InvestigationErrorCode"
+        message:
+          type: string
+        service:
+          type: [string, "null"]
+          enum: [gemini, data_service, database, null]
+    ToolCallRecord:
+      type: object
+      description: One tool call Gemini asked for, run or refused.
+      required: [step, tool, arguments, result_id, status, error, duration_ms]
+      properties:
+        step:
+          type: integer
+          minimum: 1
+          description: The tool round the call was made in.
+        tool:
+          type: string
+        arguments:
+          type: object
+        result_id:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        error:
+          type: [string, "null"]
+        duration_ms:
+          type: number
+    LLMUsage:
+      type: object
+      required: [calls, input_tokens, output_tokens, latency_ms]
+      properties:
+        calls:
+          type: integer
+          minimum: 0
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          minimum: 0
+        latency_ms:
+          type: number
+    ValidationSummary:
+      type: object
+      description: Counts from checking the interpretation's numbers.
+      required: [verified_count, unverified_count, unverified_findings]
+      properties:
+        verified_count:
+          type: integer
+          minimum: 0
+        unverified_count:
+          type: integer
+          minimum: 0
+        unverified_findings:
+          type: integer
+          minimum: 0
+    InvestigationRun:
+      type: object
+      description: What a run was asked and what it did.
+      required: [question, selection, prompt_version, model, tool_calls, validation, usage]
+      properties:
+        question:
+          type: [string, "null"]
+        selection:
+          oneOf:
+            - $ref: "#/components/schemas/Selection"
+            - type: "null"
+        prompt_version:
+          type: [string, "null"]
+        model:
+          type: [string, "null"]
+        tool_calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallRecord"
+        validation:
+          oneOf:
+            - $ref: "#/components/schemas/ValidationSummary"
+            - type: "null"
+        usage:
+          $ref: "#/components/schemas/LLMUsage"
+
+    StartedEvent:
+      type: object
+      description: "`event: started`, the first event of a run."
+      required: [investigation_id]
+      properties:
+        investigation_id:
+          type: string
+          format: uuid
+    FetchingDataEvent:
+      type: object
+      description: "`event: fetching_data`, a tool is loading data."
+      required: [tool]
+      properties:
+        tool:
+          type: string
+    AnalysisStartedEvent:
+      type: object
+      description: "`event: analysis_started`, a tool is computing its result."
+      required: [tool, result_id]
+      properties:
+        tool:
+          type: string
+        result_id:
+          type: string
+    AnalysisFinishedEvent:
+      type: object
+      description: "`event: analysis_finished`, a tool call ended; `error` is set when it failed."
+      required: [tool, result_id, error]
+      properties:
+        tool:
+          type: string
+        result_id:
+          type: string
+        error:
+          type: [string, "null"]
+    InterpretingEvent:
+      type: object
+      description: "`event: interpreting`, Gemini is writing the structured interpretation."
+      properties: {}
+    ValidatingEvent:
+      type: object
+      description: "`event: validating`, the interpretation's numbers are being checked."
+      properties: {}
+    SavedEvent:
+      type: object
+      description: "`event: saved`, the last event of a run that succeeded."
+      required: [investigation_id, status]
+      properties:
+        investigation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [succeeded]
+    FailedEvent:
+      type: object
+      description: "`event: failed`, the last event of a run that failed."
+      required: [investigation_id, code, message, service]
+      properties:
+        investigation_id:
+          type: string
+          format: uuid
+        code:
+          $ref: "#/components/schemas/InvestigationErrorCode"
+        message:
+          type: string
+        service:
+          type: [string, "null"]
+          enum: [gemini, data_service, database, null]
+    InProgressEvent:
+      type: object
+      description: "`event: in_progress`, another connection is running this investigation."
+      required: [investigation_id, status]
+      properties:
+        investigation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [running]

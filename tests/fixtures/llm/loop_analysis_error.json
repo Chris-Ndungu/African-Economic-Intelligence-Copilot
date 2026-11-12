@@ -1,0 +1,31 @@
+{
+  "description": "An unknown country and a baseline target outside the series.",
+  "responses": [
+    {
+      "tool_calls": [
+        {
+          "name": "analyze_trend",
+          "args": {
+            "country": "XXX",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2023"
+          }
+        },
+        {
+          "name": "compare_with_baseline",
+          "args": {
+            "country": "KEN",
+            "indicator": "PCPIPCH",
+            "start": "2015",
+            "end": "2020",
+            "target_period": "2023"
+          }
+        }
+      ]
+    },
+    {
+      "text": "I have the results I need."
+    }
+  ]
+}

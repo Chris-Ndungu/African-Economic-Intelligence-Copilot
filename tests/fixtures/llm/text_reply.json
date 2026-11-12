@@ -1,0 +1,13 @@
+{
+  "description": "A plain text reply with token usage.",
+  "responses": [
+    {
+      "text": "Hello from the stub.",
+      "usage": {
+        "input_tokens": 12,
+        "output_tokens": 5,
+        "latency_ms": 42.0
+      }
+    }
+  ]
+}

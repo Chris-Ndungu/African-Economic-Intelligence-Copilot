@@ -1,0 +1,9 @@
+{
+  "description": "Gemini does not answer in time.",
+  "responses": [
+    {
+      "error": "LLMTimeout",
+      "message": "Gemini did not answer within 30 seconds"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from copilot_core.data import DEFAULT_DATA_DIR
+from copilot_core.llm.gemini import DEFAULT_MODEL, GeminiConfig
 
 
 class Settings(BaseSettings):
@@ -40,7 +41,46 @@ class Settings(BaseSettings):
     Kept secret so the password never appears in a repr, log or error.
     """
 
-    @field_validator("database_url", mode="before")
+    gemini_api_key: SecretStr | None = None
+    """Gemini API key, or `None`: the app still starts, and runs fail as not configured."""
+
+    gemini_model: str = DEFAULT_MODEL
+    """The Gemini model; the default is the current stable Flash model."""
+
+    gemini_timeout_seconds: float = Field(default=30.0, gt=0)
+    """Longest wait for one Gemini call."""
+
+    gemini_max_retries: int = Field(default=3, ge=0)
+    """Retries of a rate-limited (429) or server-error (5xx) Gemini call."""
+
+    gemini_max_output_tokens: int = Field(default=4096, gt=0)
+    """Output token limit of one Gemini call."""
+
+    tool_step_limit: int = Field(default=8, ge=1)
+    """Tool rounds a run may take before it stops with `step_limit_reached`."""
+
+    max_tool_result_points: int = Field(default=500, ge=1)
+    """Data points one tool call may load before it is asked to narrow the request."""
+
+    investigation_time_limit_seconds: float = Field(default=90.0, gt=0)
+    """Longest a whole run may take before it is saved as `failed` with code `timeout`."""
+
+    pending_run_timeout_seconds: float = Field(default=300.0, gt=0)
+    """How long a `pending` run waits for its stream before it fails as `not_started`."""
+
+    stream_ping_seconds: float = Field(default=15.0, gt=0)
+    """Longest gap between server-sent events or `: ping` comments while a run streams."""
+
+    @field_validator("database_url", "gemini_api_key", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
+
+    def gemini_config(self) -> GeminiConfig:
+        return GeminiConfig(
+            api_key=self.gemini_api_key,
+            model=self.gemini_model,
+            timeout_seconds=self.gemini_timeout_seconds,
+            max_retries=self.gemini_max_retries,
+            max_output_tokens=self.gemini_max_output_tokens,
+        )

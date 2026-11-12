@@ -83,6 +83,8 @@ def run_trend_investigation(
         baselines=[],
         anomalies=[],
         interpretation=None,
+        tool_results=[],
+        charts=[],
         sources=[series.source],
         caveats=tuple(caveats),
         generated_at=datetime.now(UTC),

@@ -25,6 +25,7 @@ Commands
 - `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
+- `RUN_LIVE_GEMINI=1 uv run pytest tests/test_live_gemini.py` - the live Gemini smoke test and evaluation cases; they need `COPILOT_GEMINI_API_KEY` and are skipped otherwise. Every other test uses `StubLLMClient` with the recordings in `tests/fixtures/llm/`
 
 Rules
 
