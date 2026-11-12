@@ -71,6 +71,7 @@ def test_an_unverified_claim_shows_its_label_and_reason_and_is_not_a_plain_fact(
     assert any(text(e) == "Unverified" for e in Page(html).find_all("span"))
     assert "not in any result" in html
     assert "Observed facts" not in html and "Unverified claims" in html
+    assert not any(text(e) == "Observed fact" for e in Page(html).find_all("span"))
 
 
 def test_a_relationship_finding_shows_the_association_sentence():
