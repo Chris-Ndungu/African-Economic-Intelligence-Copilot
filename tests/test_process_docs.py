@@ -13,7 +13,7 @@ def read(path: Path) -> str:
 def strip_front_matter(text: str) -> str:
     match = re.match(r"---\n.*?\n---\n", text, re.S)
     assert match, "issue template has no front matter"
-    return text[match.end():]
+    return text[match.end() :]
 
 
 def test_process_keeps_roles_and_owner_sections():
@@ -73,7 +73,9 @@ def test_agent_team_links_pm_role_and_states_collaboration_rules():
 
 def test_agent_team_frontend_role_uses_jinja_and_htmx():
     text = read(DOCS / "agent-team.md")
-    entry = " ".join(re.search(r"^## Frontend\n(.*?)(?=^## |\Z)", text, re.S | re.M).group(1).split())
+    entry = " ".join(
+        re.search(r"^## Frontend\n(.*?)(?=^## |\Z)", text, re.S | re.M).group(1).split()
+    )
     for phrase in (
         "Jinja templates, HTMX partials, CSS and small plain-JavaScript files",
         "rendering the same `copilot_core` results the JSON API returns",
@@ -92,7 +94,7 @@ def test_agent_team_links_resolve():
 def test_issue_template_mirrors_task_template_exactly():
     doc = read(DOCS / "task-template.md")
     assert "Mirrored in `.github/ISSUE_TEMPLATE/task.md`" in doc
-    doc_sections = doc[doc.index("## Goal"):].strip()
+    doc_sections = doc[doc.index("## Goal") :].strip()
     issue = strip_front_matter(read(GITHUB / "ISSUE_TEMPLATE" / "task.md")).strip()
     assert issue == doc_sections
     assert re.findall(r"^## (.+)$", issue, re.M) == [

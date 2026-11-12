@@ -18,8 +18,10 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "mypy>=2.4.1",
     "openapi-spec-validator>=0.9.0",
     "pytest>=9.2.0",
+    "ruff>=0.17.4",
 ]
 
 [tool.pytest.ini_options]
@@ -28,3 +30,20 @@ pythonpath = ["."]
 # Show why tests were skipped, so skipped database tests are never mistaken
 # for passed ones.
 addopts = "-rs"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["backend/static/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# The formatter wraps code; long strings and URLs are left as they are.
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["copilot_core", "backend"]
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+warn_redundant_casts = true

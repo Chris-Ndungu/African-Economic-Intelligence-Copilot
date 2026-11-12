@@ -91,18 +91,14 @@ class InvestigationRecord(Base):
     )
     question: Mapped[str | None] = mapped_column(Text)
     selections: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    parameters: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default="{}"
-    )
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     findings: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
     chart_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sources: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
     data_mode: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, server_default="pending")
     error: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

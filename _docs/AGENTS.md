@@ -12,6 +12,9 @@ Commands
 
 - `uv sync` - install dependencies
 - `uv run pytest` - the whole suite
+- `uv run ruff check` - lint; `uv run ruff check --fix` fixes what it can
+- `uv run ruff format` - format the code; `uv run ruff format --check` only reports
+- `uv run mypy` - type-check `copilot_core` and `backend`
 - `uv run pytest tests/test_smoke.py` - one test file
 - `uv run uvicorn backend.main:app --reload` - serve the pages and the API at `http://localhost:8000` (API docs at `/docs`)
 - `uv run pytest tests/test_web.py` - the workspace pages, the vendored-file checksums and the OpenAPI contract validation; `api/openapi.yaml` is validated by `uv run pytest`

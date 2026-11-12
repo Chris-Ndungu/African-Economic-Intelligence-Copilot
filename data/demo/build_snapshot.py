@@ -57,14 +57,27 @@ def text(column: str) -> str:
 # One SELECT per table: columns in contract order, types set explicitly.
 TABLES = {
     "dim_country": (
-        [text(c) for c in ("country_code", "iso2_code", "country_name", "region",
-                            "sub_region", "currency_code", "income_group", "capital")],
+        [
+            text(c)
+            for c in (
+                "country_code",
+                "iso2_code",
+                "country_name",
+                "region",
+                "sub_region",
+                "currency_code",
+                "income_group",
+                "capital",
+            )
+        ],
         None,
         "country_code",
     ),
     "dim_indicator": (
-        [text(c) for c in ("indicator_code", "indicator_name", "category",
-                            "metric_unit", "data_source")],
+        [
+            text(c)
+            for c in ("indicator_code", "indicator_name", "category", "metric_unit", "data_source")
+        ],
         None,
         "indicator_code",
     ),
@@ -115,10 +128,7 @@ def main() -> None:
             sys.exit(f"missing export: {name}.csv in the given directory")
         target = OUTPUT_DIR / f"{name}.parquet"
         params = [source.as_posix()]
-        sql = (
-            f"select {', '.join(columns)} "
-            "from read_csv(?, header = true, all_varchar = true)"
-        )
+        sql = f"select {', '.join(columns)} from read_csv(?, header = true, all_varchar = true)"
         if where:
             sql += f" where {where}"
             params.append(SUPPORTED_INDICATORS)

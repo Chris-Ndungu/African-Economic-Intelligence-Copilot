@@ -1,5 +1,7 @@
 # African Economic Intelligence Copilot
 
+[![CI](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/actions/workflows/ci.yml)
+
 An AI-powered economic investigation workspace for analysts studying African economies.
 
 ## Setup

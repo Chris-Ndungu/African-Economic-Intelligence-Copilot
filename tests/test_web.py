@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openapi_spec_validator import validate
 from openapi_spec_validator.readers import read_from_filename
+from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
 
 from backend.main import create_app
 from backend.settings import Settings
@@ -120,7 +121,9 @@ def test_workspace_loads_vendored_htmx(client):
     page = Page(client.get("/").text)
     sources = [s.attrs["src"] for s in page.find_all("script") if s.attrs.get("src")]
 
-    htmx = [src for src in sources if re.fullmatch(r"/static/vendor/htmx-2\.\d+\.\d+\.min\.js", src)]
+    htmx = [
+        src for src in sources if re.fullmatch(r"/static/vendor/htmx-2\.\d+\.\d+\.min\.js", src)
+    ]
     assert len(htmx) == 1, sources
 
     response = client.get(htmx[0])
@@ -216,7 +219,7 @@ def test_contract_validator_rejects_an_invalid_contract():
     spec, _ = read_from_filename(str(CONTRACT))
     del spec["info"]
 
-    with pytest.raises(Exception):
+    with pytest.raises(OpenAPIValidationError):
         validate(spec)
 
 

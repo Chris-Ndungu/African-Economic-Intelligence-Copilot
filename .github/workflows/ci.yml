@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A new push to a pull request cancels the run still going for it.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Lint, type check and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: copilot
+          POSTGRES_PASSWORD: copilot
+          POSTGRES_DB: copilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U copilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Local-only credentials for the throwaway service container above.
+      DATABASE_URL: postgresql+psycopg://copilot:copilot@localhost:5432/copilot
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint (ruff check)
+        run: uv run ruff check
+
+      - name: Format (ruff format --check)
+        run: uv run ruff format --check
+
+      - name: Type check (mypy)
+        run: uv run mypy
+
+      - name: Test (pytest)
+        run: uv run pytest

@@ -19,7 +19,7 @@ def front_matter(path: Path) -> tuple[dict[str, str], str]:
     match = re.match(r"---\n(.*?)\n---\n", read(path), re.S)
     assert match, f"{path} has no front matter"
     fields = dict(line.split(": ", 1) for line in match.group(1).splitlines())
-    return fields, read(path)[match.end():]
+    return fields, read(path)[match.end() :]
 
 
 def flat(text: str) -> str:

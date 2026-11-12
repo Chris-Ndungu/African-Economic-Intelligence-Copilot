@@ -94,9 +94,7 @@ def test_env_example_lists_every_setting():
 
 def test_env_file_is_ignored_and_example_is_not():
     def ignored(path):
-        return subprocess.run(
-            ["git", "check-ignore", "-q", path], cwd=ROOT
-        ).returncode == 0
+        return subprocess.run(["git", "check-ignore", "-q", path], cwd=ROOT).returncode == 0
 
     assert ignored(".env")
     assert not ignored(".env.example")
