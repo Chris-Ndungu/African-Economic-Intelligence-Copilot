@@ -36,8 +36,10 @@ Follows [team/qa-engineer.md](team/qa-engineer.md).
 - Responsibilities: writes and maintains integration and Playwright tests
   from the acceptance criteria, and tests against the acceptance criteria,
   not implementation details
-- Inputs: the acceptance criteria of an issue
-- Outputs: a test PR
+- Runs once per phase, after every issue in it is implemented (see
+  [process.md](process.md))
+- Inputs: the acceptance criteria of every issue in the phase
+- Outputs: a test PR, and a PASS or FAIL comment on each issue
 
 ## Ops
 

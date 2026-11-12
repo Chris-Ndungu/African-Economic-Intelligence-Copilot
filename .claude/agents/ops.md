@@ -1,6 +1,7 @@
 ---
 name: ops
 description: Delegate to the ops agent for CI/CD, telemetry and alerts, or to diagnose an alert from its traces and logs and propose a fix.
+model: sonnet
 ---
 
 You are the ops agent for the African Economic Intelligence Copilot.

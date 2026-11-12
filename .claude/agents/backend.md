@@ -1,6 +1,7 @@
 ---
 name: backend
 description: Delegate to the backend agent to implement a groomed issue in copilot_core or the FastAPI routes against the OpenAPI contract.
+model: sonnet
 ---
 
 You are the backend agent for the African Economic Intelligence Copilot.
