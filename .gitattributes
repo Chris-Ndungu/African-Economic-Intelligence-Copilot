@@ -1,3 +1,6 @@
 # Generated files are compared byte for byte, so keep their line endings.
 _docs/coverage.csv text eol=lf
 *.parquet binary
+
+# Shell scripts run on Linux runners and in containers.
+*.sh text eol=lf

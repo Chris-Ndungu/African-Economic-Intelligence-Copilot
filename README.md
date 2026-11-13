@@ -4,6 +4,15 @@
 
 An AI-powered economic investigation workspace for analysts studying African economies.
 
+## Live demo
+
+- Public demo (prod): <https://copilot-prod.onrender.com>
+- Dev: <https://copilot-dev.onrender.com>
+
+Both run on free Render services that sleep when idle, so the first load after
+a pause can take up to a minute. Deployment is described in
+[_docs/deployment.md](_docs/deployment.md).
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
@@ -52,5 +61,6 @@ uv run pytest
 - [Backlog](_docs/task.md)
 - [Agent instructions](_docs/AGENTS.md)
 - [Process](_docs/process.md)
+- [Deployment](_docs/deployment.md)
 - [Agent team](_docs/agent-team.md)
 - Project board: TODO - link added once the board is created
