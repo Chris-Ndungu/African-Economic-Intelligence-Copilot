@@ -346,3 +346,17 @@ def test_every_recording_is_valid_json_with_responses():
         recording = json.loads(path.read_text(encoding="utf-8"))
         assert recording["description"], path
         assert recording["responses"], path
+
+
+def test_the_sdk_client_outlives_construction(monkeypatch):
+    """The SDK closes its HTTP client when its Client is garbage-collected, so the
+    GeminiClient must hold the Client, not just `client.aio.models` (a real run on
+    Render failed with "client has been closed")."""
+    import gc
+
+    monkeypatch.setenv("RUN_LIVE_GEMINI", "1")
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)  # a stale path breaks the TLS context
+    gemini = GeminiClient(GeminiConfig(api_key=SecretStr(KEY)))
+    gc.collect()
+    assert gemini._sdk is not None
+    assert not gemini._sdk._api_client._async_httpx_client.is_closed

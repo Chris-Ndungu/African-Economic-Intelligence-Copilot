@@ -115,6 +115,8 @@ class GeminiClient:
     config: GeminiConfig
     transport: Transport | None = field(default=None, repr=False)
     sleep: Callable[[float], Awaitable[None]] = field(default=asyncio.sleep, repr=False)
+    _sdk: genai.Client | None = field(default=None, init=False, repr=False)
+    """Keeps the SDK client alive: it closes its HTTP client when garbage-collected."""
 
     def __post_init__(self) -> None:
         if self.transport is not None:
@@ -125,8 +127,8 @@ class GeminiClient:
                 "StubLLMClient, or set RUN_LIVE_GEMINI=1 for the live tests."
             )
         if self.config.api_key is not None:
-            sdk = genai.Client(api_key=self.config.api_key.get_secret_value())
-            self.transport = sdk.aio.models
+            self._sdk = genai.Client(api_key=self.config.api_key.get_secret_value())
+            self.transport = self._sdk.aio.models
 
     def __repr__(self) -> str:
         return f"GeminiClient(model={self.config.model!r}, configured={self.configured})"
