@@ -61,7 +61,7 @@ The copilot retrieves economic data, performs statistical analysis, presents int
 | Explanation strategy | Start with available economic data; distinguish correlation from causation |
 | AI provider | Google Gemini API |
 | Application stack | FastAPI serving Jinja pages and HTMX partials + a JSON API defined contract-first in OpenAPI + PostgreSQL |
-| Deployment | Public web demo on Google Cloud Run with separate dev and prod environments, plus authorized live-data mode |
+| Deployment | Public web demo on Render with separate dev and prod environments, images in GitHub Container Registry and Neon Postgres, plus authorized live-data mode |
 | Reviewer access | Both bundled demo data and live BigQuery mode for authorized users |
 | Analytical depth | Analyst-grade: historical baselines, lagged relationships, configurable anomaly methods, and drill-down analysis |
 | Export | PDF reports with findings, charts, methodology, sources, and limitations |
@@ -276,9 +276,9 @@ The application should provide the model with structured analytical outputs and 
 #### Live mode
 
 - Connects to curated BigQuery data for authorized users.
-- Uses server-side credentials (the Cloud Run service identity) and restricted permissions.
+- Uses server-side credentials (a read-only BigQuery service account whose key is stored as a Render secret file) and restricted permissions. The BigQuery sandbox is enough; no Google Cloud billing is needed.
 - Never exposes credentials in browser code or the public repository.
-- Protected by authentication (OIDC login in FastAPI, or Cloud Run IAP).
+- Protected by authentication (Google OIDC login handled by FastAPI).
 - Should have sensible query limits and cost controls.
 
 If Gemini or BigQuery is unavailable, the application must clearly explain the limitation rather than pretend an AI investigation succeeded.
@@ -347,13 +347,16 @@ Tests must not call the real Gemini API or BigQuery by default. Use recorded or 
 **Decision:**
 
 - `docker compose up` starts the full local system: the API, Postgres, and the observability stack (`grafana/otel-lgtm`). There is no separate frontend service.
-- There is no frontend build or frontend container: FastAPI serves the pages, the static files, and the API from one process, so deployment is a single Cloud Run service per environment.
-- Two environments on Google Cloud Run: **dev** and **prod**, with separate secrets and databases.
-- Secrets live in Google Secret Manager and never in the repository, images, logs, or reports.
+- There is no frontend build or frontend container: FastAPI serves the pages, the static files, and the API from one process, so deployment is a single web service per environment.
+- Two environments on **Render** free web services: **dev** (`copilot-dev`) and **prod** (`copilot-prod`), with separate secrets and separate **Neon** databases.
+- Images are built once in GitHub Actions and pushed to **GitHub Container Registry (GHCR)**, tagged with the commit SHA. Render runs those images; prod runs the exact image that ran in dev.
+- Secrets live in Render environment variables (and GitHub Environment secrets for the deploy workflows), set by hand and never in the repository, `render.yaml`, images, logs, or reports.
 
-**Why Cloud Run:** It integrates with BigQuery and Google Cloud IAM through service identities, scales to zero, and gives a public URL.
+**Why Render, GHCR and Neon:** All three have free tiers that need no billing account or card, give a public HTTPS URL, run a Docker image, and offer deploy hooks and an API that GitHub Actions and the on-call agent can call. Neon is used rather than Render's own Postgres because Render's free database expires after 30 days.
 
-**Alternative considered:** A simpler Python hosting platform such as Render. It may be easier to deploy initially, but Cloud Run offers a clean path to service identities and controlled BigQuery access.
+**Free-tier limits accepted:** Render free services sleep after about 15 minutes idle, so the first request after a pause takes up to about a minute; they have 512 MB of memory and a monthly limit on instance hours shared across the workspace, so nothing pings the services to keep them awake. The PDF export falls back to "Chart could not be rendered" if Chrome is not available or runs out of memory. Render's free tier has no pre-deploy command, so migrations run from the deploy workflow.
+
+**Alternatives considered:** Google Cloud Run integrates with BigQuery through service identities, but it needs a billing account. Koyeb, Fly.io and Railway need a card. Hugging Face Spaces offers more memory, but free Docker Spaces were restricted in 2026.
 
 Keep the architecture small. Do not introduce Kubernetes, microservices, a message broker, or a separate vector database for this MVP; none is required for the core workflow.
 
@@ -362,10 +365,10 @@ Keep the architecture small. Do not introduce Kubernetes, microservices, a messa
 **Decision:** GitHub Actions.
 
 1. **On every pull request:** lint (ruff), type checks (mypy), and the full test suite, which also validates the OpenAPI contract and the vendored-file checksums. There is no ESLint, tsc, or Node step.
-2. **On merge to `main`:** build the image, push it to Artifact Registry, and deploy automatically to **dev**.
-3. **Promotion to prod:** a manually approved workflow (GitHub Environments protection rule) deploys a versioned release tag to **prod**.
+2. **On merge to `main`:** after CI passes, build the image, push it to GHCR tagged with the commit SHA, run migrations against the dev database, deploy that image to **dev** through Render's deploy hook, and smoke-test it. A failed smoke test redeploys the previous image.
+3. **Promotion to prod:** a version tag starts a workflow that waits for manual approval (GitHub Environment `prod` protection rule), then deploys the image already built for that commit to **prod**, without rebuilding.
 
-Authenticate to Google Cloud with Workload Identity Federation instead of long-lived JSON keys.
+Pushing to GHCR uses the workflow's `GITHUB_TOKEN`. The Render deploy hook URLs, the Render API key and the database URLs are GitHub Environment secrets (`dev`, `prod`), which pull requests from forks cannot read.
 
 ### 4.13 Observability, alerting, and on-call agent
 
@@ -523,7 +526,7 @@ The first end-to-end path and the contract-conformance test move to Phase 3, whe
 
 - Add OpenTelemetry instrumentation, structured logs, and metrics for the key journey.
 - Add Grafana dashboards and the user-impact alert.
-- Build the production image and deploy to dev on Cloud Run, then automatically on merge.
+- Build the production image, push it to GHCR and deploy to dev on Render, then automatically on merge.
 - Add the manually approved prod deployment.
 - Implement the on-call agent and demonstrate it on a staged failure.
 

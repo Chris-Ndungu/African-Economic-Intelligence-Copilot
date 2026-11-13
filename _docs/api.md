@@ -172,8 +172,8 @@ returns it saved. To show progress, a client uses two steps instead:
 Opening the stream for a `pending` investigation claims it (`pending` to
 `running` in one database update, so two connections can never run it twice)
 and runs it inside the stream response. Nothing keeps running after the
-response ends: Cloud Run throttles the CPU once a response is sent, so there
-is no background work. If the client disconnects, the run is cancelled and
+response ends: a hosted instance can be stopped or put to sleep once no
+request is open, so there is no background work. If the client disconnects, the run is cancelled and
 saved as `failed` with code `client_disconnected`.
 
 Each event has an increasing `id`, an `event:` name and a JSON `data:`
