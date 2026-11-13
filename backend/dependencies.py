@@ -15,6 +15,7 @@ from sqlalchemy import Engine
 
 from backend.client_ip import client_ip
 from backend.settings import Settings
+from backend.telemetry import instrument_engine
 from backend.visitor import owner_of
 from copilot_core.data import DataService, DuckDBDataService
 from copilot_core.db import create_db_engine
@@ -60,6 +61,7 @@ def get_repository(request: Request) -> InvestigationRepository:
             engine: Engine = create_db_engine(
                 url, pool_pre_ping=True, connect_args={"connect_timeout": 3}
             )
+            instrument_engine(request.app, engine)
             state.repository = InvestigationRepository(engine)
         base: InvestigationRepository = state.repository
     # Every request sees only its own visitor's investigations.
@@ -76,9 +78,14 @@ def get_run_limiter(request: Request) -> RunLimiter:
     """
     state = request.app.state
     settings = get_settings(request)
+    # Built before taking the lock: get_repository takes it too, and it is not reentrant.
+    engine = (
+        None
+        if getattr(state, "run_limiter", None)
+        else getattr(get_repository(request), "engine", None)
+    )
     with _lock:
         if getattr(state, "run_limiter", None) is None:
-            engine = getattr(get_repository(request), "engine", None)
             store = PostgresAttemptStore(engine) if engine is not None else MemoryAttemptStore()
             state.run_limiter = RunLimiter(
                 store,

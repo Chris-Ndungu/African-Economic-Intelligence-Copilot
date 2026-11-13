@@ -19,6 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend import api, errors, web
 from backend.caching import CacheControlMiddleware
+from backend.logging_config import configure_logging
 from backend.settings import Settings
 from backend.telemetry import setup_telemetry
 from backend.visitor import VisitorMiddleware
@@ -72,7 +73,7 @@ def create_app(
     settings: Settings | None = None, span_exporter: SpanExporter | None = None
 ) -> FastAPI:
     settings = settings or Settings()
-    logging.getLogger("backend").setLevel(settings.log_level.upper())
+    configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

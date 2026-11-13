@@ -65,6 +65,7 @@ from copilot_core.schemas import (
     ServiceName,
     ValidationSummary,
 )
+from copilot_core.telemetry import fail_span, investigation_id_var, span
 from copilot_core.tools.loop import LoopResult, run_tool_loop
 
 __all__ = [
@@ -220,6 +221,32 @@ class InvestigationService:
     # --- The run ------------------------------------------------------------------
 
     async def _execute(self, investigation: Investigation, emit: Emit) -> Investigation:
+        token = investigation_id_var.set(str(investigation.id))
+        try:
+            with span(
+                "investigation.run",
+                **{"investigation.id": str(investigation.id), "data.mode": self.data_mode},
+            ) as run_span:
+                saved = await self._execute_steps(investigation, emit)
+                error = saved.error
+                if saved.status == "failed":
+                    fail_span(run_span, "InvestigationFailed", error.code if error else None)
+                run_span.set_attribute("investigation.status", saved.status)
+                logger.info(
+                    "investigation %s",
+                    "succeeded" if saved.status == "succeeded" else "failed",
+                    extra={
+                        "investigation_id": str(saved.id),
+                        "outcome": saved.status,
+                        "error_code": error.code if error else None,
+                        "data_mode": self.data_mode,
+                    },
+                )
+                return saved
+        finally:
+            investigation_id_var.reset(token)
+
+    async def _execute_steps(self, investigation: Investigation, emit: Emit) -> Investigation:
         run = investigation.run
         question = run.question if run else None
         selection = run.selection if run else None
@@ -267,9 +294,10 @@ class InvestigationService:
                         f.verification == "unverified" for f in verified.findings
                     ),
                 )
-                saved = self.repository.save_success(
-                    investigation.id, result, run_record(validation)
-                )
+                with span("investigation.save", **{"investigation.id": str(investigation.id)}):
+                    saved = self.repository.save_success(
+                        investigation.id, result, run_record(validation)
+                    )
             if saved is None:
                 return self.repository.get(investigation.id)
             await emit(SavedEvent(investigation_id=investigation.id))
@@ -277,7 +305,7 @@ class InvestigationService:
         except LLMError as exc:
             return await fail(exc.code, f"Gemini failed: {exc}", "gemini")  # type: ignore[arg-type]
         except InterpretationInvalid as exc:
-            logger.warning("invalid interpretation: %s; reply: %.2000s", exc, exc.raw)
+            logger.warning("invalid interpretation (reply of %d characters)", len(exc.raw))
             return await fail(
                 "interpretation_invalid",
                 "Gemini's reply could not be read as an interpretation.",
@@ -401,17 +429,19 @@ async def investigate(
     record = record if record is not None else LoopResult()
     prompt = await asyncio.to_thread(user_prompt, data, question, selection)
     system = system_prompt(PROMPT_VERSION)
-    await run_tool_loop(
-        llm,
-        [Message(role="user", text=prompt)],
-        data,
-        system=system,
-        step_limit=settings.step_limit,
-        max_points=settings.max_points,
-        scope=selection,
-        emit=emit,
-        record=record,
-    )
+    with span("llm.tool_loop") as loop_span:
+        await run_tool_loop(
+            llm,
+            [Message(role="user", text=prompt)],
+            data,
+            system=system,
+            step_limit=settings.step_limit,
+            max_points=settings.max_points,
+            scope=selection,
+            emit=emit,
+            record=record,
+        )
+        loop_span.set_attribute("tool.calls", len(record.tool_calls))
     if record.status == "step_limit_reached":
         raise StepLimitReached
     await emit(InterpretingEvent())
@@ -423,9 +453,17 @@ async def investigate(
     record.usage.add(reply)
     draft = parse_interpretation(reply.text)
     await emit(ValidatingEvent())
-    return validate_interpretation(
-        draft, record.results, model=reply.model or llm.model, prompt_version=PROMPT_VERSION
-    )
+    with span("interpretation.validate") as validate_span:
+        verified = validate_interpretation(
+            draft, record.results, model=reply.model or llm.model, prompt_version=PROMPT_VERSION
+        )
+        validate_span.set_attributes(
+            {
+                "claims.verified": verified.verified_count,
+                "claims.unverified": verified.unverified_count,
+            }
+        )
+    return verified
 
 
 def _request(

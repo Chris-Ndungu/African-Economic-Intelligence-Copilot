@@ -34,6 +34,7 @@ from copilot_core.events import (
 )
 from copilot_core.llm.types import LLMClient, LLMResponse, Message, ToolCall, ToolResponse
 from copilot_core.schemas import LLMUsage, Selection, ToolCallRecord, ToolResult
+from copilot_core.telemetry import annotate, fail_span, span
 from copilot_core.tools.registry import TOOLS, OutOfScopeError, check_scope, count_points
 
 __all__ = ["DEFAULT_MAX_POINTS", "DEFAULT_STEP_LIMIT", "LoopResult", "UsageTotals", "run_tool_loop"]
@@ -101,30 +102,42 @@ async def _run_call(
     """Run one tool call, record it and return what the model is sent."""
     started = time.perf_counter()
     error: str | None = None
+    error_type = ""
+    points = 0
+    flagged = 0
     payload: dict[str, Any] | None = None
     tool = TOOLS.get(call.name)
     if tool is None:
         error = f"Unknown tool {call.name!r}. Allowed tools: {', '.join(TOOLS)}."
     else:
-        try:
-            args = tool.args_model.model_validate(call.args)
-            check_scope(args, scope)
-            await emit(FetchingDataEvent(tool=tool.name))
-            loaded = await asyncio.to_thread(tool.fetch, args, data)
-            points = count_points(loaded)
-            if points > max_points:
-                raise OutOfScopeError(
-                    f"This request covers {points} data points, more than the limit of "
-                    f"{max_points}. Ask for fewer countries or a shorter period."
-                )
-            await emit(AnalysisStartedEvent(tool=tool.name, result_id=result_id))
-            payload = await asyncio.to_thread(tool.analyse, args, loaded)
-        except ValidationError as exc:
-            error = f"Invalid arguments for {call.name}: {_problems(exc)}"
-        except DataUnavailableError:
-            raise
-        except (AnalysisError, InvalidRequestError, OutOfScopeError) as exc:
-            error = str(exc)
+        with span(
+            f"tool.{call.name}", **{"tool.name": call.name, "result.id": result_id}
+        ) as tool_span:
+            try:
+                args = tool.args_model.model_validate(call.args)
+                check_scope(args, scope)
+                await emit(FetchingDataEvent(tool=tool.name))
+                loaded = await asyncio.to_thread(tool.fetch, args, data)
+                points = count_points(loaded)
+                if points > max_points:
+                    raise OutOfScopeError(
+                        f"This request covers {points} data points, more than the limit of "
+                        f"{max_points}. Ask for fewer countries or a shorter period."
+                    )
+                await emit(AnalysisStartedEvent(tool=tool.name, result_id=result_id))
+                payload = await asyncio.to_thread(tool.analyse, args, loaded)
+                flagged = int(payload.get("flagged_count") or 0)
+            except ValidationError as exc:
+                error_type = type(exc).__name__
+                error = f"Invalid arguments for {call.name}: {_problems(exc)}"
+            except DataUnavailableError:
+                raise
+            except (AnalysisError, InvalidRequestError, OutOfScopeError) as exc:
+                error_type = type(exc).__name__
+                error = str(exc)
+            if error is not None:
+                fail_span(tool_span, error_type)
+            annotate(**{"row.count": points, "anomalies.flagged": flagged})
     duration = round((time.perf_counter() - started) * 1000, 3)
     if tool is not None:
         await emit(AnalysisFinishedEvent(tool=tool.name, result_id=result_id, error=error))

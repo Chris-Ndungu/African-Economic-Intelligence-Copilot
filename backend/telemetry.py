@@ -15,8 +15,12 @@ import threading
 import time
 
 from fastapi import FastAPI
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -24,8 +28,12 @@ from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
     SpanExporter,
 )
+from sqlalchemy import Engine
+from starlette.types import ASGIApp, Receive, Scope, Send
 
+from backend.logging_config import LOGGERS, RedactFilter
 from backend.settings import Settings
+from copilot_core.telemetry import tracer_provider_var
 
 EXCLUDED_URLS = "/health"
 EXPORT_LOGGERS = ("opentelemetry.exporter.otlp.proto.http.trace_exporter", "opentelemetry.sdk")
@@ -52,8 +60,51 @@ class OncePerMinute(logging.Filter):
             return True
 
 
+class TracerProviderMiddleware:
+    """Makes this app's tracer provider the one ``copilot_core`` spans use for the request.
+
+    ``copilot_core`` only knows the OpenTelemetry API; this is how it reaches
+    the app's SDK provider without a process-wide global, so several apps (as
+    in tests) each keep their own spans.
+    """
+
+    def __init__(self, app: ASGIApp, provider: TracerProvider) -> None:
+        self.app = app
+        self.provider = provider
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        token = tracer_provider_var.set(self.provider)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            tracer_provider_var.reset(token)
+
+
 def _traces_url(endpoint: str) -> str:
     return endpoint.rstrip("/") + "/v1/traces"
+
+
+def _export_logs(resource: Resource, settings: Settings) -> None:
+    """Also send the application's logs over OTLP, so Grafana links a line to its trace."""
+    endpoint = (settings.otlp_endpoint or "").rstrip("/") + "/v1/logs"
+    logs = LoggerProvider(resource=resource)
+    logs.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(endpoint=endpoint, timeout=3))
+    )
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=logs)
+    handler.addFilter(RedactFilter())
+    for name in LOGGERS:
+        logging.getLogger(name).addHandler(handler)
+
+
+def instrument_engine(app: FastAPI, engine: Engine) -> None:
+    """Trace the SQL of ``engine`` when tracing is on. Statements keep their placeholders."""
+    provider = getattr(app.state, "tracer_provider", None)
+    if provider is not None:
+        # SQLAlchemy 2.1 is newer than the range the instrumentor declares; its engine events are unchanged.
+        SQLAlchemyInstrumentor().instrument(
+            engine=engine, tracer_provider=provider, skip_dep_check=True
+        )
 
 
 def setup_telemetry(
@@ -80,6 +131,7 @@ def setup_telemetry(
         for name in EXPORT_LOGGERS:
             logging.getLogger(name).addFilter(throttle)
         # The endpoint comes from OTEL_EXPORTER_OTLP_ENDPOINT, which the exporter reads itself.
+        _export_logs(provider.resource, settings)
         provider.add_span_processor(
             BatchSpanProcessor(
                 OTLPSpanExporter(endpoint=_traces_url(settings.otlp_endpoint or ""), timeout=3)
@@ -87,4 +139,5 @@ def setup_telemetry(
         )
     FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, excluded_urls=EXCLUDED_URLS)
     app.state.tracer_provider = provider
+    app.add_middleware(TracerProviderMiddleware, provider=provider)
     return provider

@@ -36,6 +36,7 @@ from copilot_core.models import (
     period_frequency,
 )
 from copilot_core.schemas import Country, CoverageEntry, Indicator
+from copilot_core.telemetry import annotate, span
 
 __all__ = [
     "DEFAULT_DATA_DIR",
@@ -258,6 +259,16 @@ class DuckDBDataService:
     def get_series(
         self, countries: Sequence[str], indicator: str, start: str, end: str
     ) -> list[SeriesResult]:
+        with span("data.get_series", **{"indicator": indicator, "country.count": len(countries)}):
+            series = self._get_series(countries, indicator, start, end)
+            annotate(
+                **{"series.count": len(series), "row.count": sum(len(x.points) for x in series)}
+            )
+            return series
+
+    def _get_series(
+        self, countries: Sequence[str], indicator: str, start: str, end: str
+    ) -> list[SeriesResult]:
         first, last = _year(start, "start"), _year(end, "end")
         if first > last:
             raise InvalidPeriodError(f"start {start!r} is after end {end!r}", "start")
@@ -275,13 +286,18 @@ class DuckDBDataService:
                     [countries],
                 ).fetchall()
             )
-            rows = cursor.execute(
+            statement = (
                 f"SELECT country_code, report_year, indicator_value, is_forecast, ingestion_date "
                 f"FROM {FACT_TABLE} WHERE indicator_code = ? "
                 "AND country_code IN (SELECT unnest(?::VARCHAR[])) "
-                "AND report_year BETWEEN ? AND ? ORDER BY country_code, report_year",
-                [indicator, countries, first, last],
-            ).fetchall()
+                "AND report_year BETWEEN ? AND ? ORDER BY country_code, report_year"
+            )
+            # The statement has placeholders only; the values are never recorded.
+            with span(
+                "duckdb.query", **{"db.system": "duckdb", "db.statement": statement}
+            ) as query:
+                rows = cursor.execute(statement, [indicator, countries, first, last]).fetchall()
+                query.set_attribute("row.count", len(rows))
             extent = dict(
                 (row[0], (row[1], row[2]))
                 for row in cursor.execute(

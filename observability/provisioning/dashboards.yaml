@@ -1,0 +1,11 @@
+# Loads the dashboards in observability/dashboards/ into Grafana at startup, so
+# nothing is imported by hand. docker-compose.yml mounts this file into the
+# grafana/otel-lgtm container and the folder at /copilot-dashboards.
+apiVersion: 1
+providers:
+  - name: copilot
+    folder: Copilot
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /copilot-dashboards
