@@ -170,6 +170,7 @@ def test_investigations_table_has_the_required_columns():
         "error_code",
         "error_service",
         "run",
+        "owner",
     }
     for name in ("created_at", "updated_at"):
         assert table.columns[name].type.timezone is True
