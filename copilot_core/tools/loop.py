@@ -127,7 +127,7 @@ async def _run_call(
                     )
                 await emit(AnalysisStartedEvent(tool=tool.name, result_id=result_id))
                 payload = await asyncio.to_thread(tool.analyse, args, loaded)
-                flagged = int(payload.get("flagged_count") or 0)
+                flagged = int((payload or {}).get("flagged_count") or 0)
             except ValidationError as exc:
                 error_type = type(exc).__name__
                 error = f"Invalid arguments for {call.name}: {_problems(exc)}"

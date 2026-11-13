@@ -171,7 +171,7 @@ class _PostgresTransaction:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def _where(self, since: datetime, client: str | None) -> list:  # type: ignore[type-arg]
+    def _where(self, since: datetime, client: str | None) -> list:
         conditions = [RunAttemptRecord.created_at > since]
         if client is not None:
             conditions.append(RunAttemptRecord.client_hash == client)

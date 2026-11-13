@@ -326,7 +326,7 @@ class InvestigationService:
         except LLMError as exc:
             return await fail(exc.code, f"Gemini failed: {exc}", "gemini")  # type: ignore[arg-type]
         except InterpretationInvalid as exc:
-            logger.warning("invalid interpretation (reply of %d characters)", len(exc.raw))
+            logger.warning("invalid interpretation (reply of %d characters)", len(exc.raw or ""))
             return await fail(
                 "interpretation_invalid",
                 "Gemini's reply could not be read as an interpretation.",
