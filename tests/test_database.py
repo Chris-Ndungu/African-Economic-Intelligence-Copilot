@@ -153,7 +153,7 @@ def test_investigations_table_has_the_required_columns():
         "status",
         "error",
         "error_code",
-        "run",
+        "error_service",
         "owner",
         "run",
         "created_at",
