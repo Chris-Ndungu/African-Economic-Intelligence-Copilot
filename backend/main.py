@@ -13,8 +13,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import Response
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend import api, errors, web
 from backend.caching import CacheControlMiddleware

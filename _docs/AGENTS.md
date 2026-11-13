@@ -56,6 +56,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `Dockerfile` - the production image: one FastAPI process serving pages, static files and the API, run as a non-root user
 - `docker-compose.yml` - the local stack: Postgres and the app, built from `backend/Dockerfile`
 - `docker-compose.e2e.yml` - override of it for the end-to-end tests: stubbed Gemini and a fresh database volume
 - `alembic.ini` - Alembic configuration; the connection string comes from `DATABASE_URL`, never this file
