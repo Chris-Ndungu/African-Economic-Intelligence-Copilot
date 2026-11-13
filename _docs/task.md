@@ -148,21 +148,21 @@ Description: Using the existing Playwright setup, add journeys for running an in
 Goal: Ship one image that serves the server-rendered pages, static files, and JSON API from the same FastAPI process.
 Description: Write a multi-stage Dockerfile that installs Python dependencies with `uv sync --locked --no-dev` and copies `backend/templates/` and `backend/static/`; there is no Node stage or frontend build (#74). Run it as a non-root user on the `PORT` variable, return a JSON 404 under `/api/` and an HTML 404 elsewhere, set long cache headers for vendored files and `no-cache` for pages, and verify it locally against the Compose Postgres.
 
-## 37. Set up Google Cloud foundations
-Goal: Prepare a secure Google Cloud project for automated deployments.
-Description: Create or configure the Google Cloud project, an Artifact Registry repository, Secret Manager entries for the Gemini API key and database URLs, and a deployer service account. Configure Workload Identity Federation so GitHub Actions can authenticate without JSON keys, and document every step in `_docs/deployment.md`.
+## 37. Set up the hosting foundations
+Goal: Prepare free hosting accounts for automated deployments, with no billing account or card.
+Description: Publish the production image to GitHub Container Registry as a public package, create a Neon project with separate dev and prod databases, describe the two Render web services in a `render.yaml` Blueprint with secret values left out, and create the GitHub Environments `dev` and `prod` with their secrets. Document every step in `_docs/deployment.md`.
 
 ## 38. Deploy the dev environment manually
 Goal: Have the application running at a public dev URL.
-Description: Create a Neon Postgres database for dev and a Cloud Run dev service that uses the production image, the Secret Manager secrets, and a least-privilege runtime service account. Deploy once by hand, run migrations, confirm `/health` and demo mode work at the public URL, and add the steps to `_docs/deployment.md`.
+Description: Run migrations against the Neon dev database with the production image, then create the Render `copilot-dev` web service from the GHCR image with its secrets set in Render. Confirm `/health`, demo mode, history and PDF export work at the public URL, and add the steps to `_docs/deployment.md`.
 
 ## 39. Deploy to dev automatically on merge
 Goal: Every merge to `main` produces a running dev deployment.
-Description: Add a GitHub Actions workflow that builds and pushes the production image to Artifact Registry, runs migrations, and deploys to the dev Cloud Run service. Finish with a smoke test against `/health` and publish the dev URL in the README.
+Description: Add a GitHub Actions workflow that, after CI passes, builds and pushes the image to GHCR tagged with the commit SHA, runs migrations against the dev database, and deploys that image through the Render deploy hook. Finish with a smoke test that redeploys the previous image if it fails, and publish the dev URL in the README.
 
 ## 40. Add a manually approved production deployment
 Goal: Promote tested releases to prod with explicit approval.
-Description: Provision a prod Cloud Run service and Neon database mirroring the dev setup in `_docs/deployment.md`. Add a workflow, triggered by a version tag and protected by a GitHub Environment approval rule, that deploys the already-built image to prod.
+Description: Create the Render `copilot-prod` service and use the Neon prod database, mirroring the dev setup in `_docs/deployment.md`. Add a workflow, triggered by a version tag and protected by a GitHub Environment approval rule, that deploys the image already in GHCR for that commit to prod without rebuilding.
 
 ## 41. Add the local observability stack
 Goal: See backend traces locally in Grafana.
@@ -182,7 +182,7 @@ Description: Add a small hand-written `backend/static/tracing.js` that starts a 
 
 ## 45. Connect deployed environments to Grafana Cloud and add an alert
 Goal: Get notified when users are affected in dev or prod.
-Description: Configure the Cloud Run services to export telemetry to Grafana Cloud and import the committed investigation dashboard. Create an alert on user impact, for example investigation failure rate above 10% over 10 minutes, and document how to trigger it deliberately.
+Description: Configure the Render services to export telemetry to Grafana Cloud and import the committed investigation dashboard. Create an alert on user impact, for example investigation failure rate above 10% over 10 minutes, and document how to trigger it deliberately.
 
 ## 46. Build the alert-triggered diagnosis agent
 Goal: Have an agent investigate automatically when an alert fires.
@@ -202,7 +202,7 @@ Description: Implement the `DataService` interface in `copilot_core` against the
 
 ## 50. Add live mode with authentication
 Goal: Let authorized users switch to live BigQuery data safely.
-Description: Add OIDC login (or Cloud Run IAP) that unlocks live mode for allowlisted users, while anonymous visitors stay in demo mode. Grant the Cloud Run runtime service account read-only BigQuery access, and add tests that unauthenticated requests cannot reach live data.
+Description: Add Google OIDC login, handled by FastAPI, that unlocks live mode for allowlisted users, while anonymous visitors stay in demo mode. Give the deployed service a read-only BigQuery service account key as a Render secret file, and add tests that unauthenticated requests cannot reach live data.
 
 ## 51. Implement the SQL fallback validator
 Goal: Ensure any AI-generated SQL is read-only and limited to approved tables.
