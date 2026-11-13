@@ -463,16 +463,17 @@ async def investigate(
             record=record,
         )
         loop_span.set_attribute("tool.calls", len(record.tool_calls))
-    if record.status == "step_limit_reached":
-        raise StepLimitReached
-    await emit(InterpretingEvent())
-    reply = await traced_generate(
-        llm,
-        [*record.messages, Message(role="user", text=FINAL_INSTRUCTION)],
-        system=system,
-        response_schema=Interpretation,
-    )
-    record.usage.add(reply)
+        if record.status == "step_limit_reached":
+            raise StepLimitReached
+        await emit(InterpretingEvent())
+        # The interpretation call is a Gemini call too, so it nests under the loop.
+        reply = await traced_generate(
+            llm,
+            [*record.messages, Message(role="user", text=FINAL_INSTRUCTION)],
+            system=system,
+            response_schema=Interpretation,
+        )
+        record.usage.add(reply)
     draft = parse_interpretation(reply.text)
     await emit(ValidatingEvent())
     with span("interpretation.validate") as validate_span:

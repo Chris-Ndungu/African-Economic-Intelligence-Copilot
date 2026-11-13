@@ -107,3 +107,20 @@ def test_no_metric_has_a_label_with_unbounded_values():
         assert {key for key, _ in labels} <= ALLOWED_LABELS
         for key, value in labels:
             assert key != "outcome" or isinstance(value, str) and len(value) < 40
+
+
+def test_a_rate_limit_hit_is_counted_by_limit_kind():
+    from copilot_core.rate_limit import (  # noqa: PLC0415
+        MemoryAttemptStore,
+        RateLimitedError,
+        RateLimits,
+        RunLimiter,
+    )
+
+    limiter = RunLimiter(MemoryAttemptStore(), RateLimits(per_client_limit=1, daily_limit=9))
+    before = snapshot()
+    limiter.check("a")
+    with pytest.raises(RateLimitedError):
+        limiter.check("a")
+    changed = delta(before, snapshot())
+    assert changed[("rate_limit_hits_total", (("limit", "client"),))] == 1
