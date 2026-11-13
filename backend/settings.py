@@ -102,6 +102,15 @@ class Settings(BaseSettings):
     rate_limit_salt: SecretStr | None = None
     """Salt for the hashed client keys of the rate limit."""
 
+    otlp_endpoint: str | None = Field(default=None, validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    """OTLP collector URL; unset means no telemetry is exported."""
+
+    otel_service_name: str = Field(default="copilot-api", validation_alias="OTEL_SERVICE_NAME")
+    """The `service.name` of this process's telemetry."""
+
+    deployment_environment: str = "local"
+    """The `deployment.environment` resource attribute."""
+
     environment: Literal["local", "test", "prod"] = "local"
     """Where the app runs (`COPILOT_ENVIRONMENT`); `prod` refuses the stub client."""
 
@@ -124,7 +133,7 @@ class Settings(BaseSettings):
             )
         return self
 
-    @field_validator("database_url", "gemini_api_key", mode="before")
+    @field_validator("database_url", "gemini_api_key", "otlp_endpoint", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value

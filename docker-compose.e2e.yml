@@ -8,6 +8,10 @@
 # answers at http://localhost:8010, apart from `docker compose up`'s port 8000
 # and Postgres port 5432, so both can run at the same time.
 services:
+  otel:
+    # The journeys need no Grafana; the app exports nothing without an endpoint.
+    profiles: ["observability"]
+
   db:
     # No host port: only the app talks to this database.
     ports: !reset []
@@ -19,6 +23,7 @@ services:
       LLM_CLIENT: stub
       LLM_STUB_SCENARIO: run_success
       COPILOT_ENVIRONMENT: test
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
       # Every journey runs from the same address; the limits are tested separately.
       COPILOT_RUNS_PER_IP_PER_HOUR: "100000"
       COPILOT_RUNS_PER_DAY_TOTAL: "100000"

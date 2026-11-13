@@ -17,6 +17,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # Grafana, Tempo, Loki and Prometheus in one container. Open Grafana at
+  # http://localhost:3000 (Explore, then Tempo) to find a trace.
+  otel:
+    image: grafana/otel-lgtm:0.11.0
+    ports:
+      - "3000:3000"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - grafana-data:/data
+
   api:
     build:
       context: .
@@ -24,6 +35,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://copilot:copilot@db:5432/copilot
       COPILOT_LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel:4318
+      OTEL_SERVICE_NAME: copilot-api
+      COPILOT_DEPLOYMENT_ENVIRONMENT: local
     ports:
       - "8000:8000"
     depends_on:
@@ -50,3 +64,4 @@ services:
 
 volumes:
   postgres-data:
+  grafana-data:

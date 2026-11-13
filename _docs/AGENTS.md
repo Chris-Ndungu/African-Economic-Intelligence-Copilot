@@ -28,6 +28,8 @@ Commands
 - `uv run alembic check` - fail if the SQLAlchemy models in `copilot_core/db.py` and the migrations differ (needs a database at head)
 - `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
+- `docker compose up`, then open Grafana at `http://localhost:3000` (anonymous admin) -> Explore -> the Tempo data source -> Search, service name `copilot-api`: every API request except `/health` is a trace with its method, route and status. Without `OTEL_EXPORTER_OTLP_ENDPOINT` the app exports nothing; the stack's OTLP ports are 4317 (gRPC) and 4318 (HTTP)
+- `uv run pytest tests/test_telemetry.py` - the tracing tests, with an in-memory span exporter
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
 - `uv run playwright install chromium` - install the browser the end-to-end tests drive; once per machine
 - `uv run pytest -m e2e` - only the end-to-end tests in `tests/e2e/`: they start the stack from `docker-compose.yml` and `docker-compose.e2e.yml` (stubbed Gemini, demo data, a fresh database) at `http://localhost:8010`, or use the app at `E2E_BASE_URL` if it is set. They start the stack only with `-m e2e`; a plain `uv run pytest` skips them with a message, as it does without Docker. Traces and screenshots of failures are written to `test-results/`

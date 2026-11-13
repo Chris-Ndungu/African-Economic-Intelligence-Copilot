@@ -14,11 +14,13 @@ from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+from opentelemetry.sdk.trace.export import SpanExporter
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend import api, errors, web
 from backend.caching import CacheControlMiddleware
 from backend.settings import Settings
+from backend.telemetry import setup_telemetry
 from backend.visitor import VisitorMiddleware
 from copilot_core.db import create_db_engine
 from copilot_core.repository import InvestigationRepository, RepositoryError
@@ -66,7 +68,9 @@ def delete_expired_anonymous(settings: Settings) -> int:
     return deleted
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, span_exporter: SpanExporter | None = None
+) -> FastAPI:
     settings = settings or Settings()
     logging.getLogger("backend").setLevel(settings.log_level.upper())
 
@@ -106,6 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(web.router)
     app.mount("/static", StaticFiles(directory=web.STATIC_DIR), name="static")
 
+    setup_telemetry(app, settings, span_exporter)
     return app
 
 
