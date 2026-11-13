@@ -37,11 +37,12 @@ class MemoryRepository:
         return view
 
     def _mine(self):
-        return [
-            i
-            for i in self.items.values()
-            if self._owner is None or self.owners[i.id] == self._owner
-        ]
+        return [i for i in self.items.values() if self._visible(i)]
+
+    def _visible(self, item):
+        # Items a test put straight into `items` have no owner and are visible to all.
+        owner = self.owners.get(item.id)
+        return self._owner is None or owner is None or owner == self._owner
 
     def create_run(self, question, selection, data_mode, title):
         if self._owner is not None and self._limit is not None and len(self._mine()) >= self._limit:
@@ -74,7 +75,7 @@ class MemoryRepository:
 
     def get(self, investigation_id):
         item = self.items.get(investigation_id)
-        if item is None or (self._owner is not None and self.owners[item.id] != self._owner):
+        if item is None or not self._visible(item):
             raise InvestigationNotFoundError(investigation_id)
         return item
 

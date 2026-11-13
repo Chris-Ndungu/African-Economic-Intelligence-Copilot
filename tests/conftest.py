@@ -19,6 +19,11 @@ from copilot_core.db import create_db_engine, database_url
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Most tests start many runs from the one address `testclient`; the run limits are
+# tested on their own in tests/test_rate_limit.py, which sets its own.
+os.environ.setdefault("COPILOT_RUNS_PER_IP_PER_HOUR", "100000")
+os.environ.setdefault("COPILOT_RUNS_PER_DAY_TOTAL", "100000")
+
 
 HOW_TO_RUN = (
     "DATABASE_URL is not set, so the Postgres integration tests did not run. "
