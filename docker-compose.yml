@@ -27,6 +27,9 @@ services:
       - "4318:4318"
     volumes:
       - grafana-data:/data
+      # The dashboards in observability/dashboards/ are loaded at startup.
+      - ./observability/provisioning/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/copilot.yaml:ro
+      - ./observability/dashboards:/copilot-dashboards:ro
 
   api:
     build:

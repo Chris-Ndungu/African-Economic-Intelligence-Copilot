@@ -15,12 +15,16 @@ import threading
 import time
 
 from fastapi import FastAPI
+from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -97,6 +101,16 @@ def _export_logs(resource: Resource, settings: Settings) -> None:
         logging.getLogger(name).addHandler(handler)
 
 
+def _export_metrics(resource: Resource, settings: Settings) -> None:
+    """Export the metrics of ``copilot_core.telemetry`` over OTLP every 10 seconds."""
+    endpoint = (settings.otlp_endpoint or "").rstrip("/") + "/v1/metrics"
+    reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(endpoint=endpoint, timeout=3), export_interval_millis=10_000
+    )
+    # Only the first provider set in a process counts; later calls are ignored.
+    metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
+
+
 def instrument_engine(app: FastAPI, engine: Engine) -> None:
     """Trace the SQL of ``engine`` when tracing is on. Statements keep their placeholders."""
     provider = getattr(app.state, "tracer_provider", None)
@@ -132,6 +146,7 @@ def setup_telemetry(
             logging.getLogger(name).addFilter(throttle)
         # The endpoint comes from OTEL_EXPORTER_OTLP_ENDPOINT, which the exporter reads itself.
         _export_logs(provider.resource, settings)
+        _export_metrics(provider.resource, settings)
         provider.add_span_processor(
             BatchSpanProcessor(
                 OTLPSpanExporter(endpoint=_traces_url(settings.otlp_endpoint or ""), timeout=3)

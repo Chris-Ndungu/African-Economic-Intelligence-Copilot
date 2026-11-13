@@ -32,6 +32,7 @@ from copilot_core.events import (
     FetchingDataEvent,
     ignore,
 )
+from copilot_core.llm.traced import traced_generate
 from copilot_core.llm.types import LLMClient, LLMResponse, Message, ToolCall, ToolResponse
 from copilot_core.schemas import LLMUsage, Selection, ToolCallRecord, ToolResult
 from copilot_core.telemetry import annotate, fail_span, span
@@ -183,7 +184,7 @@ async def run_tool_loop(
     declarations = [tool.declaration() for tool in TOOLS.values()]
     rounds = 0
     while True:
-        response = await llm.generate(record.messages, system=system, tools=declarations)
+        response = await traced_generate(llm, record.messages, system=system, tools=declarations)
         record.usage.add(response)
         record.messages.append(response.as_message())
         if not response.tool_calls:

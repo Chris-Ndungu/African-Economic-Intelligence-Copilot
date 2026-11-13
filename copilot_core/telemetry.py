@@ -23,6 +23,9 @@ __all__ = [
     "current_investigation_id",
     "investigation_id_var",
     "is_sensitive",
+    "record_claims",
+    "record_investigation",
+    "record_llm_call",
     "record_rate_limit_hit",
     "safe_attributes",
     "span",
@@ -48,6 +51,41 @@ _rate_limit_hits = _meter.create_counter(
     "rate_limit_hits_total",
     description="Runs refused because a rate limit was reached",
 )
+
+# Buckets reach past the 90-second run limit. No metric has an unbounded label:
+# outcomes are a fixed set of codes, models a handful of names.
+_investigations = _meter.create_counter(
+    "investigations_total", description="Investigation runs by outcome"
+)
+_investigation_seconds = _meter.create_histogram(
+    "investigation_duration_seconds",
+    description="End-to-end duration of an investigation run, in seconds",
+    explicit_bucket_boundaries_advisory=[1, 2.5, 5, 10, 20, 30, 45, 60, 90, 120, 180],
+)
+_llm_seconds = _meter.create_histogram(
+    "llm_request_duration_seconds",
+    description="Duration of one Gemini call, in seconds",
+    explicit_bucket_boundaries_advisory=[0.25, 0.5, 1, 2.5, 5, 10, 20, 30, 60],
+)
+_llm_tokens = _meter.create_counter("llm_tokens_total", description="Gemini tokens used")
+_claims = _meter.create_counter("claims_total", description="Claims checked against tool results")
+
+
+def record_investigation(outcome: str, seconds: float) -> None:
+    """Count a finished run; ``outcome`` is ``succeeded``, ``unsupported`` or an error code."""
+    _investigations.add(1, {"outcome": outcome})
+    _investigation_seconds.record(seconds, {"outcome": outcome})
+
+
+def record_llm_call(model: str, seconds: float, input_tokens: int, output_tokens: int) -> None:
+    _llm_seconds.record(seconds, {"model": model})
+    _llm_tokens.add(input_tokens, {"type": "input", "model": model})
+    _llm_tokens.add(output_tokens, {"type": "output", "model": model})
+
+
+def record_claims(verified: int, unverified: int) -> None:
+    _claims.add(verified, {"verified": "true"})
+    _claims.add(unverified, {"verified": "false"})
 
 
 def is_sensitive(name: str) -> bool:

@@ -29,6 +29,8 @@ Commands
 - `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
 - `docker compose up`, then open Grafana at `http://localhost:3000` (anonymous admin) -> Explore -> the Tempo data source -> Search, service name `copilot-api`: every API request except `/health` is a trace with its method, route and status. Without `OTEL_EXPORTER_OTLP_ENDPOINT` the app exports nothing; the stack's OTLP ports are 4317 (gRPC) and 4318 (HTTP)
+- Grafana -> Dashboards -> Copilot -> Investigation health: investigations per minute by outcome, failure rate, p50/p95 latency, Gemini p95 latency, tokens per hour and the unverified-claim rate; it is provisioned from `observability/dashboards/investigation.json` by `docker compose up`
+- `uv run pytest tests/test_metrics.py tests/test_tracing_and_logs.py` - the metrics (in-memory reader), the span tree and the check that no key, password or question reaches a span or a log
 - `uv run pytest tests/test_telemetry.py` - the tracing tests, with an in-memory span exporter
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
 - `uv run playwright install chromium` - install the browser the end-to-end tests drive; once per machine
