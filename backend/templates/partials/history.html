@@ -1,5 +1,6 @@
 <section id="history" class="history" aria-label="Investigation history" hx-get="/partials/history" hx-trigger="investigation-saved from:body" hx-swap="outerHTML">
   <h2>History</h2>
+  <p class="hint history-note">History is kept in this browser only. Clearing cookies starts an empty history.</p>
 {% if history.error %}
   <div class="panel-error" role="alert">
     <p class="message">{{ history.error }}</p>

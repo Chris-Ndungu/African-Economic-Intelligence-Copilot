@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 import uuid
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
@@ -48,6 +49,7 @@ from copilot_core.interpretation import (
     system_prompt,
 )
 from copilot_core.llm.errors import LLMError
+from copilot_core.llm.traced import traced_generate
 from copilot_core.llm.types import LLMClient, Message
 from copilot_core.models import AnomalyResult, BaselineResult, ComparisonResult, SeriesResult
 from copilot_core.repository import InvestigationRepository
@@ -64,6 +66,13 @@ from copilot_core.schemas import (
     Selection,
     ServiceName,
     ValidationSummary,
+)
+from copilot_core.telemetry import (
+    fail_span,
+    investigation_id_var,
+    record_claims,
+    record_investigation,
+    span,
 )
 from copilot_core.tools.loop import LoopResult, run_tool_loop
 
@@ -100,6 +109,16 @@ class RunSettings:
 
 class StepLimitReached(Exception):
     """The model still asked for tools after the step limit."""
+
+
+def _outcome(investigation: Investigation) -> str:
+    """The ``outcome`` metric label: ``succeeded``, ``unsupported`` or the error code."""
+    if investigation.status == "failed":
+        return investigation.error.code if investigation.error else "internal_error"
+    interpretation = getattr(investigation.result, "interpretation", None)
+    if getattr(interpretation, "unsupported_reason", None):
+        return "unsupported"
+    return "succeeded"
 
 
 def selection_question(selection: Selection) -> str:
@@ -220,6 +239,34 @@ class InvestigationService:
     # --- The run ------------------------------------------------------------------
 
     async def _execute(self, investigation: Investigation, emit: Emit) -> Investigation:
+        token = investigation_id_var.set(str(investigation.id))
+        started = time.perf_counter()
+        try:
+            with span(
+                "investigation.run",
+                **{"investigation.id": str(investigation.id), "data.mode": self.data_mode},
+            ) as run_span:
+                saved = await self._execute_steps(investigation, emit)
+                error = saved.error
+                if saved.status == "failed":
+                    fail_span(run_span, "InvestigationFailed", error.code if error else None)
+                run_span.set_attribute("investigation.status", saved.status)
+                record_investigation(_outcome(saved), time.perf_counter() - started)
+                logger.info(
+                    "investigation %s",
+                    "succeeded" if saved.status == "succeeded" else "failed",
+                    extra={
+                        "investigation_id": str(saved.id),
+                        "outcome": saved.status,
+                        "error_code": error.code if error else None,
+                        "data_mode": self.data_mode,
+                    },
+                )
+                return saved
+        finally:
+            investigation_id_var.reset(token)
+
+    async def _execute_steps(self, investigation: Investigation, emit: Emit) -> Investigation:
         run = investigation.run
         question = run.question if run else None
         selection = run.selection if run else None
@@ -258,6 +305,7 @@ class InvestigationService:
                 verified = await investigate(
                     llm, data, question, selection, self.settings, emit, record
                 )
+                record_claims(verified.verified_count, verified.unverified_count)
                 meta["model"] = verified.model
                 result = self._result(verified, record, question, selection)
                 validation = ValidationSummary(
@@ -267,9 +315,10 @@ class InvestigationService:
                         f.verification == "unverified" for f in verified.findings
                     ),
                 )
-                saved = self.repository.save_success(
-                    investigation.id, result, run_record(validation)
-                )
+                with span("investigation.save", **{"investigation.id": str(investigation.id)}):
+                    saved = self.repository.save_success(
+                        investigation.id, result, run_record(validation)
+                    )
             if saved is None:
                 return self.repository.get(investigation.id)
             await emit(SavedEvent(investigation_id=investigation.id))
@@ -277,7 +326,7 @@ class InvestigationService:
         except LLMError as exc:
             return await fail(exc.code, f"Gemini failed: {exc}", "gemini")  # type: ignore[arg-type]
         except InterpretationInvalid as exc:
-            logger.warning("invalid interpretation: %s; reply: %.2000s", exc, exc.raw)
+            logger.warning("invalid interpretation (reply of %d characters)", len(exc.raw or ""))
             return await fail(
                 "interpretation_invalid",
                 "Gemini's reply could not be read as an interpretation.",
@@ -401,31 +450,43 @@ async def investigate(
     record = record if record is not None else LoopResult()
     prompt = await asyncio.to_thread(user_prompt, data, question, selection)
     system = system_prompt(PROMPT_VERSION)
-    await run_tool_loop(
-        llm,
-        [Message(role="user", text=prompt)],
-        data,
-        system=system,
-        step_limit=settings.step_limit,
-        max_points=settings.max_points,
-        scope=selection,
-        emit=emit,
-        record=record,
-    )
-    if record.status == "step_limit_reached":
-        raise StepLimitReached
-    await emit(InterpretingEvent())
-    reply = await llm.generate(
-        [*record.messages, Message(role="user", text=FINAL_INSTRUCTION)],
-        system=system,
-        response_schema=Interpretation,
-    )
-    record.usage.add(reply)
+    with span("llm.tool_loop") as loop_span:
+        await run_tool_loop(
+            llm,
+            [Message(role="user", text=prompt)],
+            data,
+            system=system,
+            step_limit=settings.step_limit,
+            max_points=settings.max_points,
+            scope=selection,
+            emit=emit,
+            record=record,
+        )
+        loop_span.set_attribute("tool.calls", len(record.tool_calls))
+        if record.status == "step_limit_reached":
+            raise StepLimitReached
+        await emit(InterpretingEvent())
+        # The interpretation call is a Gemini call too, so it nests under the loop.
+        reply = await traced_generate(
+            llm,
+            [*record.messages, Message(role="user", text=FINAL_INSTRUCTION)],
+            system=system,
+            response_schema=Interpretation,
+        )
+        record.usage.add(reply)
     draft = parse_interpretation(reply.text)
     await emit(ValidatingEvent())
-    return validate_interpretation(
-        draft, record.results, model=reply.model or llm.model, prompt_version=PROMPT_VERSION
-    )
+    with span("interpretation.validate") as validate_span:
+        verified = validate_interpretation(
+            draft, record.results, model=reply.model or llm.model, prompt_version=PROMPT_VERSION
+        )
+        validate_span.set_attributes(
+            {
+                "claims.verified": verified.verified_count,
+                "claims.unverified": verified.unverified_count,
+            }
+        )
+    return verified
 
 
 def _request(

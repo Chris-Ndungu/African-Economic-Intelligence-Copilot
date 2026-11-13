@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from copilot_core.repository import (
     Claim,
+    InvestigationLimitError,
     InvestigationNotFoundError,
     InvestigationPage,
 )
@@ -24,8 +25,28 @@ from copilot_core.schemas import (
 class MemoryRepository:
     def __init__(self) -> None:
         self.items: dict[uuid.UUID, Investigation] = {}
+        self.owners: dict[uuid.UUID, str | None] = {}
+        self._owner: str | None = None
+        self._limit: int | None = None
+
+    def for_owner(self, owner, limit=None):
+        """A view of the same investigations that sees and saves only ``owner``'s."""
+        view = MemoryRepository.__new__(MemoryRepository)
+        view.items, view.owners = self.items, self.owners
+        view._owner, view._limit = owner, limit
+        return view
+
+    def _mine(self):
+        return [i for i in self.items.values() if self._visible(i)]
+
+    def _visible(self, item):
+        # Items a test put straight into `items` have no owner and are visible to all.
+        owner = self.owners.get(item.id)
+        return self._owner is None or owner is None or owner == self._owner
 
     def create_run(self, question, selection, data_mode, title):
+        if self._owner is not None and self._limit is not None and len(self._mine()) >= self._limit:
+            raise InvestigationLimitError(self._limit)
         now = datetime.now(UTC)
         run = InvestigationRun(
             question=question,
@@ -49,13 +70,14 @@ class MemoryRepository:
             updated_at=now,
         )
         self.items[item.id] = item
+        self.owners[item.id] = self._owner
         return item
 
     def get(self, investigation_id):
-        try:
-            return self.items[investigation_id]
-        except KeyError:
-            raise InvestigationNotFoundError(investigation_id) from None
+        item = self.items.get(investigation_id)
+        if item is None or not self._visible(item):
+            raise InvestigationNotFoundError(investigation_id)
+        return item
 
     def _set(self, investigation_id, **changes):
         item = self.get(investigation_id).model_copy(update=changes)
@@ -85,7 +107,7 @@ class MemoryRepository:
         return True
 
     def list(self, limit=20, cursor=None):
-        ordered = sorted(self.items.values(), key=lambda i: i.created_at, reverse=True)
+        ordered = sorted(self._mine(), key=lambda i: i.created_at, reverse=True)
         return InvestigationPage(
             items=[
                 InvestigationSummary(

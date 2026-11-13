@@ -13,11 +13,21 @@ import threading
 from fastapi import Request
 from sqlalchemy import Engine
 
+from backend.client_ip import client_ip
 from backend.settings import Settings
+from backend.telemetry import instrument_engine
+from backend.visitor import owner_of
 from copilot_core.data import DataService, DuckDBDataService
 from copilot_core.db import create_db_engine
 from copilot_core.llm import GeminiClient, LLMClient, StubLLMClient
 from copilot_core.meta import get_meta
+from copilot_core.rate_limit import (
+    MemoryAttemptStore,
+    PostgresAttemptStore,
+    RateLimits,
+    RunLimiter,
+    client_key,
+)
 from copilot_core.repository import DatabaseUnavailableError, InvestigationRepository
 from copilot_core.runs import InvestigationService, RunSettings
 from copilot_core.schemas import Meta
@@ -51,9 +61,54 @@ def get_repository(request: Request) -> InvestigationRepository:
             engine: Engine = create_db_engine(
                 url, pool_pre_ping=True, connect_args={"connect_timeout": 3}
             )
+            instrument_engine(request.app, engine)
             state.repository = InvestigationRepository(engine)
-        repository: InvestigationRepository = state.repository
-    return repository
+        base: InvestigationRepository = state.repository
+    # Every request sees only its own visitor's investigations.
+    return base.for_owner(
+        owner_of(request.scope), get_settings(request).anonymous_investigation_limit
+    )
+
+
+def get_run_limiter(request: Request) -> RunLimiter:
+    """The run limiter. Counts live in Postgres so they hold across instances.
+
+    Without a database engine (tests with an in-memory repository) counts are
+    kept in this process; a deployment always has the database.
+    """
+    state = request.app.state
+    settings = get_settings(request)
+    # Built before taking the lock: get_repository takes it too, and it is not reentrant.
+    engine = (
+        None
+        if getattr(state, "run_limiter", None)
+        else getattr(get_repository(request), "engine", None)
+    )
+    with _lock:
+        if getattr(state, "run_limiter", None) is None:
+            store = PostgresAttemptStore(engine) if engine is not None else MemoryAttemptStore()
+            state.run_limiter = RunLimiter(
+                store,
+                RateLimits(
+                    per_client_limit=settings.runs_per_ip_per_hour,
+                    authenticated_limit=settings.authenticated_runs_per_hour,
+                    daily_limit=settings.runs_per_day_total,
+                ),
+            )
+        limiter: RunLimiter = state.run_limiter
+    return limiter
+
+
+def enforce_run_limit(request: Request) -> None:
+    """Count one run for this client or raise ``RateLimitedError``; Gemini is not called yet.
+
+    Every path that starts a run calls this: the JSON endpoints and the HTML
+    run and retry routes. Reading, listing and exporting never do.
+    """
+    settings = get_settings(request)
+    salt = settings.rate_limit_salt.get_secret_value() if settings.rate_limit_salt else ""
+    key = client_key(client_ip(request, settings.trusted_proxy_hops), salt)
+    get_run_limiter(request).check(key, "anonymous")
 
 
 def get_llm(request: Request) -> LLMClient:

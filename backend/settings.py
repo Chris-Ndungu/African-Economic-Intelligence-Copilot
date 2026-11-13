@@ -76,6 +76,46 @@ class Settings(BaseSettings):
     stream_ping_seconds: float = Field(default=15.0, gt=0)
     """Longest gap between server-sent events or `: ping` comments while a run streams."""
 
+    anonymous_investigation_limit: int = Field(default=50, ge=1)
+    """Most investigations one anonymous visitor may have saved; one more is refused."""
+
+    anonymous_retention_days: float = Field(default=30.0, gt=0)
+    """Anonymous investigations older than this are deleted at startup."""
+
+    runs_per_ip_per_hour: int = Field(default=10, ge=1)
+    """Investigations one anonymous client may run per hour (`429` over it)."""
+
+    runs_per_day_total: int = Field(default=200, ge=1)
+    """Investigations all visitors together may run per day (`429` over it)."""
+
+    authenticated_runs_per_hour: int = Field(default=60, ge=1)
+    """The higher hourly limit of an authenticated live-mode user (#50)."""
+
+    trusted_proxy_hops: int = Field(default=0, ge=0)
+    """Proxies in front of the app that append to `X-Forwarded-For`.
+
+    0 ignores the header: the client is the TCP peer. On Cloud Run set 1, so
+    the client is the entry Google's front end appended, which a client cannot
+    forge; entries before it are client-supplied and ignored.
+    """
+
+    rate_limit_salt: SecretStr | None = None
+    """Salt for the hashed client keys of the rate limit."""
+
+    otlp_endpoint: str | None = Field(default=None, validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    """OTLP collector URL; unset means no telemetry is exported."""
+
+    otlp_headers: SecretStr | None = Field(
+        default=None, validation_alias="OTEL_EXPORTER_OTLP_HEADERS"
+    )
+    """Auth headers for the collector, `key=value,...`; added on the server only, never sent to a browser."""
+
+    otel_service_name: str = Field(default="copilot-api", validation_alias="OTEL_SERVICE_NAME")
+    """The `service.name` of this process's telemetry."""
+
+    deployment_environment: str = "local"
+    """The `deployment.environment` resource attribute."""
+
     environment: Literal["local", "test", "prod"] = "local"
     """Where the app runs (`COPILOT_ENVIRONMENT`); `prod` refuses the stub client."""
 
@@ -98,7 +138,9 @@ class Settings(BaseSettings):
             )
         return self
 
-    @field_validator("database_url", "gemini_api_key", mode="before")
+    @field_validator(
+        "database_url", "gemini_api_key", "otlp_endpoint", "otlp_headers", mode="before"
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value

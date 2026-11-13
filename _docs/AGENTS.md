@@ -18,12 +18,21 @@ Commands
 - `uv run pytest tests/test_smoke.py` - one test file
 - `uv run uvicorn backend.main:app --reload` - serve the pages and the API at `http://localhost:8000` (API docs at `/docs`)
 - `uv run pytest tests/test_web.py` - the workspace pages, the vendored-file checksums and the OpenAPI contract validation; `api/openapi.yaml` is validated by `uv run pytest`
+- `docker build -t copilot .` - build the production image (root `Dockerfile`: multi-stage, non-root, no dev dependencies, tests or `.env`); it listens on `PORT` (default 8080) and does not run migrations
+- `docker run --rm -e DATABASE_URL=postgresql+psycopg://copilot:copilot@host.docker.internal:5432/copilot copilot alembic upgrade head` - run the migrations as their own step with the production image
+- `docker run --rm -p 8080:8080 -e DATABASE_URL=... copilot` - serve the app at `http://localhost:8080`; `/health` returns 200
+- `uv run pytest tests/test_production_serving.py` - the cache headers and the JSON and HTML 404 pages, without Docker
 - `docker compose up` - build and run Postgres and the app with migrations applied, at `http://localhost:8000`; `docker compose down -v` stops it and deletes the database
 - `docker run -d --name copilot-postgres -e POSTGRES_USER=copilot -e POSTGRES_PASSWORD=copilot -e POSTGRES_DB=copilot -p 5432:5432 postgres:17` - start a local Postgres; then set `DATABASE_URL=postgresql+psycopg://copilot:copilot@localhost:5432/copilot` in `.env` or the shell
 - `uv run alembic upgrade head` - apply the migrations to the database in `DATABASE_URL`; `uv run alembic downgrade base` removes them
 - `uv run alembic check` - fail if the SQLAlchemy models in `copilot_core/db.py` and the migrations differ (needs a database at head)
 - `uv run alembic revision --autogenerate -m "describe the change"` - draft a migration from model changes; review it before committing
 - `uv run pytest tests/test_migrations.py` - the Postgres integration tests; they need `DATABASE_URL` and a role that can create databases, run in a throwaway database, and are skipped with a reason when `DATABASE_URL` is not set
+- `docker compose up`, then open Grafana at `http://localhost:3000` (anonymous admin) -> Explore -> the Tempo data source -> Search, service name `copilot-api`: every API request except `/health` is a trace with its method, route and status. Without `OTEL_EXPORTER_OTLP_ENDPOINT` the app exports nothing; the stack's OTLP ports are 4317 (gRPC) and 4318 (HTTP)
+- Grafana -> Dashboards -> Copilot -> Investigation health: investigations per minute by outcome, failure rate, p50/p95 latency, Gemini p95 latency, tokens per hour and the unverified-claim rate; it is provisioned from `observability/dashboards/investigation.json` by `docker compose up`
+- `uv run pytest tests/test_metrics.py tests/test_tracing_and_logs.py` - the metrics (in-memory reader), the span tree and the check that no key, password or question reaches a span or a log
+- Clicking Run investigation in the workspace sends a `traceparent` header and one `ui.run_investigation` span (service `copilot-web`) through the same-origin `POST /otlp/v1/traces`, which the API forwards to the collector, so one trace runs from the browser to the database; `uv run pytest tests/test_frontend_tracing.py` checks it
+- `uv run pytest tests/test_telemetry.py` - the tracing tests, with an in-memory span exporter
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
 - `uv run playwright install chromium` - install the browser the end-to-end tests drive; once per machine
 - `uv run pytest -m e2e` - only the end-to-end tests in `tests/e2e/`: they start the stack from `docker-compose.yml` and `docker-compose.e2e.yml` (stubbed Gemini, demo data, a fresh database) at `http://localhost:8010`, or use the app at `E2E_BASE_URL` if it is set. They start the stack only with `-m e2e`; a plain `uv run pytest` skips them with a message, as it does without Docker. Traces and screenshots of failures are written to `test-results/`
@@ -52,6 +61,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `Dockerfile` - the production image: one FastAPI process serving pages, static files and the API, run as a non-root user
 - `docker-compose.yml` - the local stack: Postgres and the app, built from `backend/Dockerfile`
 - `docker-compose.e2e.yml` - override of it for the end-to-end tests: stubbed Gemini and a fresh database volume
 - `alembic.ini` - Alembic configuration; the connection string comes from `DATABASE_URL`, never this file
@@ -63,6 +73,7 @@ Repository layout
 - `tests/` - all Python tests, run with `uv run pytest`
 - `main.py` - placeholder entry point from `uv init`
 - `migrations/` - Alembic migrations; the database schema changes only through a new migration here
+- `observability/` - the Grafana dashboard (`dashboards/`) and its provisioning (`provisioning/`) for the local stack
 - `pyproject.toml` - project metadata, dependencies and pytest settings
 - `uv.lock` - locked dependency versions, updated by `uv`
 - `README.md` - project overview, setup and test commands

@@ -18,6 +18,7 @@ from typing import Any, Literal, get_args
 
 from pydantic import SecretStr
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     Engine,
@@ -40,6 +41,7 @@ __all__ = [
     "DataMode",
     "InvestigationRecord",
     "InvestigationStatus",
+    "RunAttemptRecord",
     "create_db_engine",
     "database_url",
 ]
@@ -106,6 +108,7 @@ class InvestigationRecord(Base):
     error_code: Mapped[str | None] = mapped_column(Text)
     error_service: Mapped[str | None] = mapped_column(Text)
     run: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    owner: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -120,6 +123,34 @@ Index(
     InvestigationRecord.created_at.desc(),
     InvestigationRecord.id.desc(),
 )
+
+
+# Lists one visitor's investigations, and finds expired anonymous ones.
+Index(
+    "ix_investigations_owner_created_at", InvestigationRecord.owner, InvestigationRecord.created_at
+)
+
+
+class RunAttemptRecord(Base):
+    """One counted investigation run, for the rate limits in ``copilot_core.rate_limit``.
+
+    ``client_hash`` is a salted hash of the client; the address itself is never
+    stored. Rows are deleted once older than the longest limit window.
+    """
+
+    __tablename__ = "run_attempts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    client_hash: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+Index(
+    "ix_run_attempts_client_hash_created_at",
+    RunAttemptRecord.client_hash,
+    RunAttemptRecord.created_at,
+)
+Index("ix_run_attempts_created_at", RunAttemptRecord.created_at)
 
 
 def database_url(url: str | SecretStr) -> URL:

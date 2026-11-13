@@ -1,5 +1,5 @@
 <section id="results" class="run-progress" data-run-id="{{ investigation_id }}" aria-label="Investigation progress"
-         hx-ext="sse" sse-connect="/partials/investigations/{{ investigation_id }}/progress" sse-close="close">
+         hx-ext="sse" sse-connect="/partials/investigations/{{ investigation_id }}/progress{% if traceparent %}?traceparent={{ traceparent }}{% endif %}" sse-close="close">
   <h2>Running the investigation</h2>
   <ol id="run-steps" class="steps" aria-live="polite" sse-swap="step" hx-swap="beforeend"></ol>
   <span class="run-ping" sse-swap="ping" hidden></span>

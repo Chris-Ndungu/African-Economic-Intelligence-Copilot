@@ -25,11 +25,13 @@ from fastapi.templating import Jinja2Templates
 
 from backend.api import EventStreamResponse
 from backend.dependencies import (
+    enforce_run_limit,
     get_app_meta,
     get_data_service,
     get_investigation_service,
     get_repository,
 )
+from backend.tracecontext import adopt_traceparent, current_traceparent
 from copilot_core.data import DataError, DataService, DataUnavailableError
 from copilot_core.error_messages import error_message, message_table
 from copilot_core.events import FailedEvent, Heartbeat, InProgressEvent, ProgressEvent, SavedEvent
@@ -40,8 +42,10 @@ from copilot_core.investigation import run_trend_investigation
 from copilot_core.meta import banner_text
 from copilot_core.models import SeriesResult
 from copilot_core.progress import build_run_request, describe_event, rerun_request
+from copilot_core.rate_limit import RateLimitedError
 from copilot_core.repository import (
     DatabaseUnavailableError,
+    InvestigationLimitError,
     InvestigationNotFoundError,
     RepositoryError,
 )
@@ -301,6 +305,8 @@ def _save(request: Request, data: DataService, form: dict[str, str]) -> HTMLResp
         saved = get_repository(request).create(body, data_mode=body.result.data_mode)
     except DataError as exc:
         return _message(request, str(exc), 422)
+    except InvestigationLimitError as exc:
+        return _message(request, str(exc), 409)
     except RepositoryError:
         message = "The investigation could not be saved: the database is unavailable."
         return _message(request, message, 503)
@@ -338,8 +344,12 @@ def _run_form_response(
 
 
 def _progress_page(request: Request, investigation_id: uuid.UUID) -> HTMLResponse:
+    """The progress partial; its stream URL carries the trace context, never the question."""
+    traceparent = current_traceparent(request.headers.get("traceparent"))
     return templates.TemplateResponse(
-        request, "partials/run_progress.html", {"investigation_id": investigation_id}
+        request,
+        "partials/run_progress.html",
+        {"investigation_id": investigation_id, "traceparent": traceparent},
     )
 
 
@@ -349,7 +359,15 @@ def _start(request: Request, question: str, submitted: SubmittedSelection) -> HT
     if form.body is None:
         return _run_form_response(request, form.question, submitted, form.hint or "")
     try:
+        enforce_run_limit(request)
         created = get_investigation_service(request).create(form.body)
+    except RateLimitedError as exc:
+        response = _run_form_response(request, form.question, submitted, str(exc))
+        response.status_code = 429
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
+    except InvestigationLimitError as exc:
+        return _run_form_response(request, form.question, submitted, str(exc))
     except RepositoryError:
         hint = "The investigation could not be started: the database is unavailable."
         return _run_form_response(request, form.question, submitted, hint)
@@ -379,7 +397,14 @@ def _retry(request: Request, investigation_id: str) -> HTMLResponse:
         return _message(request, "That investigation has no input to run again.", 422)
     body = rerun_request(run.question, run.selection)
     try:
+        enforce_run_limit(request)
         created = get_investigation_service(request).create(body)
+    except RateLimitedError as exc:
+        response = _message(request, str(exc), 429)
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
+    except InvestigationLimitError as exc:
+        return _message(request, str(exc), 409)
     except RepositoryError:
         return _message(request, "The database is unavailable. Try again shortly.", 503)
     return _progress_page(request, created.id)
@@ -435,7 +460,11 @@ async def _only_outcome(kind: str) -> AsyncIterator[str]:
 
 
 @router.get("/partials/investigations/{investigation_id}/progress")
-async def progress_stream(request: Request, investigation_id: str) -> StreamingResponse:
+async def progress_stream(
+    request: Request,
+    investigation_id: str,
+    traceparent: Annotated[str | None, Query()] = None,
+) -> StreamingResponse:
     """Run a pending investigation and stream its progress as HTML fragments.
 
     A thin route over the same iterator as the JSON stream: it claims the
@@ -443,6 +472,9 @@ async def progress_stream(request: Request, investigation_id: str) -> StreamingR
     An unknown ID or an unavailable database is answered inside the stream
     with ``200``, so the browser shows the message instead of reconnecting.
     """
+    # EventSource cannot send headers: a valid trace context in the URL makes the
+    # run a child of the browser's trace; anything else starts a new trace.
+    adopt_traceparent(traceparent)
     try:
         runs = get_investigation_service(request)
         investigation = await run_in_threadpool(runs.get, uuid.UUID(investigation_id))

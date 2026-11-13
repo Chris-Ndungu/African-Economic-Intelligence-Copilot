@@ -10,11 +10,19 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+from opentelemetry.sdk.trace.export import SpanExporter
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend import api, errors, web
+from backend import api, errors, otlp, web
+from backend.caching import CacheControlMiddleware
+from backend.logging_config import configure_logging
 from backend.settings import Settings
+from backend.telemetry import setup_telemetry
+from backend.visitor import VisitorMiddleware
 from copilot_core.db import create_db_engine
 from copilot_core.repository import InvestigationRepository, RepositoryError
 from copilot_core.schemas import Health
@@ -42,19 +50,57 @@ def sweep_stale_runs(settings: Settings) -> int:
     return changed
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def delete_expired_anonymous(settings: Settings) -> int:
+    """Delete anonymous investigations past their retention; 0 without a database."""
+    if settings.database_url is None:
+        return 0
+    engine = create_db_engine(settings.database_url, connect_args={"connect_timeout": 3})
+    try:
+        deleted = InvestigationRepository(engine).delete_expired_anonymous(
+            settings.anonymous_retention_days
+        )
+    except Exception as exc:  # the API starts without its database
+        logger.warning("could not delete expired investigations: %s", type(exc).__name__)
+        return 0
+    finally:
+        engine.dispose()
+    if deleted:
+        logger.info("deleted %d expired anonymous investigations", deleted)
+    return deleted
+
+
+def create_app(
+    settings: Settings | None = None, span_exporter: SpanExporter | None = None
+) -> FastAPI:
     settings = settings or Settings()
-    logging.getLogger("backend").setLevel(settings.log_level.upper())
+    configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sweep_stale_runs(settings)
+        delete_expired_anonymous(settings)
         yield
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.state.settings = settings
 
     errors.install(app)
+    app.add_middleware(CacheControlMiddleware)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def not_found(request: Request, exc: StarletteHTTPException) -> Response:
+        # An unknown path: JSON under /api, the HTML page anywhere else.
+        if exc.status_code != 404:
+            return await http_exception_handler(request, exc)
+        if request.url.path == "/api" or request.url.path.startswith("/api/"):
+            return errors.error_response(404, "not_found", "There is no such endpoint.")
+        return web.templates.TemplateResponse(request, "pages/not_found.html", status_code=404)
+
+    app.add_middleware(
+        VisitorMiddleware,
+        max_age_days=settings.anonymous_retention_days,
+        secure=settings.environment == "prod",
+    )
 
     @app.get("/health", tags=["health"], operation_id="getHealth")
     def health() -> Health:
@@ -63,8 +109,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(api.router)
     app.include_router(web.router)
+    app.include_router(otlp.router)
     app.mount("/static", StaticFiles(directory=web.STATIC_DIR), name="static")
 
+    setup_telemetry(app, settings, span_exporter)
     return app
 
 
