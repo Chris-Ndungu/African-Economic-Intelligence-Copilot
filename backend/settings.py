@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     stream_ping_seconds: float = Field(default=15.0, gt=0)
     """Longest gap between server-sent events or `: ping` comments while a run streams."""
 
+    anonymous_investigation_limit: int = Field(default=50, ge=1)
+    """Most investigations one anonymous visitor may have saved; one more is refused."""
+
+    anonymous_retention_days: float = Field(default=30.0, gt=0)
+    """Anonymous investigations older than this are deleted at startup."""
+
     environment: Literal["local", "test", "prod"] = "local"
     """Where the app runs (`COPILOT_ENVIRONMENT`); `prod` refuses the stub client."""
 

@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend import api, errors, web
 from backend.settings import Settings
+from backend.visitor import VisitorMiddleware
 from copilot_core.db import create_db_engine
 from copilot_core.repository import InvestigationRepository, RepositoryError
 from copilot_core.schemas import Health
@@ -42,6 +43,25 @@ def sweep_stale_runs(settings: Settings) -> int:
     return changed
 
 
+def delete_expired_anonymous(settings: Settings) -> int:
+    """Delete anonymous investigations past their retention; 0 without a database."""
+    if settings.database_url is None:
+        return 0
+    engine = create_db_engine(settings.database_url, connect_args={"connect_timeout": 3})
+    try:
+        deleted = InvestigationRepository(engine).delete_expired_anonymous(
+            settings.anonymous_retention_days
+        )
+    except Exception as exc:  # the API starts without its database
+        logger.warning("could not delete expired investigations: %s", type(exc).__name__)
+        return 0
+    finally:
+        engine.dispose()
+    if deleted:
+        logger.info("deleted %d expired anonymous investigations", deleted)
+    return deleted
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     logging.getLogger("backend").setLevel(settings.log_level.upper())
@@ -49,12 +69,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sweep_stale_runs(settings)
+        delete_expired_anonymous(settings)
         yield
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     app.state.settings = settings
 
     errors.install(app)
+    app.add_middleware(
+        VisitorMiddleware,
+        max_age_days=settings.anonymous_retention_days,
+        secure=settings.environment == "prod",
+    )
 
     @app.get("/health", tags=["health"], operation_id="getHealth")
     def health() -> Health:

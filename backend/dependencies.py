@@ -14,6 +14,7 @@ from fastapi import Request
 from sqlalchemy import Engine
 
 from backend.settings import Settings
+from backend.visitor import owner_of
 from copilot_core.data import DataService, DuckDBDataService
 from copilot_core.db import create_db_engine
 from copilot_core.llm import GeminiClient, LLMClient, StubLLMClient
@@ -52,8 +53,11 @@ def get_repository(request: Request) -> InvestigationRepository:
                 url, pool_pre_ping=True, connect_args={"connect_timeout": 3}
             )
             state.repository = InvestigationRepository(engine)
-        repository: InvestigationRepository = state.repository
-    return repository
+        base: InvestigationRepository = state.repository
+    # Every request sees only its own visitor's investigations.
+    return base.for_owner(
+        owner_of(request.scope), get_settings(request).anonymous_investigation_limit
+    )
 
 
 def get_llm(request: Request) -> LLMClient:

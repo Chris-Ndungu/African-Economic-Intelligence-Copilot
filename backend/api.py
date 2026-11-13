@@ -148,7 +148,7 @@ def list_investigations(
     tags=["investigations"],
     operation_id="saveInvestigation",
     status_code=status.HTTP_201_CREATED,
-    responses=responses(422, 500, 503),
+    responses=responses(409, 422, 500, 503),
 )
 def save_investigation(
     body: InvestigationCreate, repository: Repository, response: Response
@@ -163,7 +163,7 @@ def save_investigation(
     "/investigations/run",
     tags=["investigations"],
     operation_id="runInvestigation",
-    responses=responses(422, 500, 503),
+    responses=responses(409, 422, 429, 500, 503),
 )
 async def run_investigation(body: InvestigationRunRequest, request: Request) -> Investigation:
     """Runs an investigation inside the request and returns it saved as `succeeded`."""
@@ -178,7 +178,7 @@ async def run_investigation(body: InvestigationRunRequest, request: Request) -> 
     tags=["investigations"],
     operation_id="createInvestigationRun",
     status_code=status.HTTP_202_ACCEPTED,
-    responses=responses(422, 500, 503),
+    responses=responses(409, 422, 429, 500, 503),
 )
 def create_investigation_run(
     body: InvestigationRunRequest, request: Request, response: Response

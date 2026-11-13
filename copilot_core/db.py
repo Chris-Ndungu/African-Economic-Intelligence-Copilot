@@ -106,6 +106,7 @@ class InvestigationRecord(Base):
     error_code: Mapped[str | None] = mapped_column(Text)
     error_service: Mapped[str | None] = mapped_column(Text)
     run: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    owner: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -119,6 +120,12 @@ Index(
     "ix_investigations_created_at_id",
     InvestigationRecord.created_at.desc(),
     InvestigationRecord.id.desc(),
+)
+
+
+# Lists one visitor's investigations, and finds expired anonymous ones.
+Index(
+    "ix_investigations_owner_created_at", InvestigationRecord.owner, InvestigationRecord.created_at
 )
 
 

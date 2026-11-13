@@ -109,6 +109,7 @@ class ErrorBody(_Body):
         "validation_error",
         "not_found",
         "conflict",
+        "rate_limited",
         "step_limit_reached",
         "service_unavailable",
         "internal_error",

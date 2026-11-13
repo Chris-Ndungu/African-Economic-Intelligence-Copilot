@@ -47,6 +47,9 @@ class FakeRepository:
         self.fail = fail
         self.writes = 0
 
+    def for_owner(self, owner, limit=None):
+        return self
+
     def list(self, limit=20, cursor=None):
         if self.fail:
             raise DatabaseUnavailableError("down")

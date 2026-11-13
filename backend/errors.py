@@ -19,6 +19,7 @@ from copilot_core.repository import (
     DatabaseUnavailableError,
     InvalidCursorError,
     InvalidStatusTransitionError,
+    InvestigationLimitError,
     InvestigationNotFoundError,
 )
 from copilot_core.schemas import ErrorBody, ErrorDetail, Investigation
@@ -30,6 +31,7 @@ ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     for code, description in {
         404: "No saved investigation has this identifier.",
         409: "The investigation is not in a state that allows this operation.",
+        429: "Too many investigations were run; see the Retry-After header.",
         422: "The request is invalid.",
         500: "An unexpected server error.",
         503: "A service the operation depends on is unavailable.",
@@ -124,6 +126,10 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(InvestigationNotFoundError)
     async def not_found(request: Request, exc: InvestigationNotFoundError) -> JSONResponse:
         return error_response(404, "not_found", str(exc))
+
+    @app.exception_handler(InvestigationLimitError)
+    async def history_full(request: Request, exc: InvestigationLimitError) -> JSONResponse:
+        return error_response(409, "conflict", str(exc))
 
     @app.exception_handler(InvestigationNotExportableError)
     async def not_exportable(

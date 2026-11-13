@@ -247,6 +247,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Investigation"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -283,6 +287,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InvestigationRunAccepted"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -420,6 +428,8 @@ paths:
               examples:
                 saved:
                   $ref: "#/components/examples/InvestigationExample"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
@@ -584,7 +594,9 @@ components:
     Conflict:
       description: >-
         The investigation is not in a state that allows this operation, for
-        example exporting one that is `pending`, `running` or `failed`.
+        example exporting one that is `pending`, `running` or `failed`; or
+        this visitor already has the maximum number of saved investigations
+        (the message names the limit).
       content:
         application/json:
           schema:
@@ -595,6 +607,29 @@ components:
               value:
                 code: conflict
                 message: Only succeeded investigations can be exported. This one is running.
+                service: null
+                details: []
+    RateLimited:
+      description: >-
+        The client ran too many investigations: over its per-IP limit or over
+        the daily total across all visitors. The `Retry-After` header gives
+        the seconds until a run is allowed again. Gemini was not called.
+      headers:
+        Retry-After:
+          description: Seconds until the limit allows another run.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            perIp:
+              summary: Per-visitor limit
+              value:
+                code: rate_limited
+                message: You have reached the limit of 10 investigations per hour. Try again in 12 minutes.
                 service: null
                 details: []
     InternalError:
@@ -1055,7 +1090,7 @@ components:
         code:
           type: string
           description: Machine-readable error code.
-          enum: [validation_error, not_found, conflict, step_limit_reached, service_unavailable, internal_error]
+          enum: [validation_error, not_found, conflict, rate_limited, step_limit_reached, service_unavailable, internal_error]
         message:
           type: string
           description: Human-readable explanation of the error.

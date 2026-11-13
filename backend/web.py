@@ -42,6 +42,7 @@ from copilot_core.models import SeriesResult
 from copilot_core.progress import build_run_request, describe_event, rerun_request
 from copilot_core.repository import (
     DatabaseUnavailableError,
+    InvestigationLimitError,
     InvestigationNotFoundError,
     RepositoryError,
 )
@@ -301,6 +302,8 @@ def _save(request: Request, data: DataService, form: dict[str, str]) -> HTMLResp
         saved = get_repository(request).create(body, data_mode=body.result.data_mode)
     except DataError as exc:
         return _message(request, str(exc), 422)
+    except InvestigationLimitError as exc:
+        return _message(request, str(exc), 409)
     except RepositoryError:
         message = "The investigation could not be saved: the database is unavailable."
         return _message(request, message, 503)
@@ -350,6 +353,8 @@ def _start(request: Request, question: str, submitted: SubmittedSelection) -> HT
         return _run_form_response(request, form.question, submitted, form.hint or "")
     try:
         created = get_investigation_service(request).create(form.body)
+    except InvestigationLimitError as exc:
+        return _run_form_response(request, form.question, submitted, str(exc))
     except RepositoryError:
         hint = "The investigation could not be started: the database is unavailable."
         return _run_form_response(request, form.question, submitted, hint)
@@ -380,6 +385,8 @@ def _retry(request: Request, investigation_id: str) -> HTMLResponse:
     body = rerun_request(run.question, run.selection)
     try:
         created = get_investigation_service(request).create(body)
+    except InvestigationLimitError as exc:
+        return _message(request, str(exc), 409)
     except RepositoryError:
         return _message(request, "The database is unavailable. Try again shortly.", 503)
     return _progress_page(request, created.id)

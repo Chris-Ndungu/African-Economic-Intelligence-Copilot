@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
-from sqlalchemy import Engine, select, tuple_, update
+from sqlalchemy import Engine, delete, func, select, tuple_, update
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,7 @@ __all__ = [
     "DatabaseUnavailableError",
     "InvalidCursorError",
     "InvalidStatusTransitionError",
+    "InvestigationLimitError",
     "InvestigationNotFoundError",
     "InvestigationPage",
     "InvestigationRepository",
@@ -76,6 +77,17 @@ class InvestigationNotFoundError(RepositoryError):
     def __init__(self, investigation_id: uuid.UUID) -> None:
         self.investigation_id = investigation_id
         super().__init__(f"Investigation {investigation_id} was not found.")
+
+
+class InvestigationLimitError(RepositoryError):
+    """The owner already has the most investigations the history may hold. The API answers ``409``."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        super().__init__(
+            f"This browser has reached the limit of {limit} saved investigations. "
+            "Investigations are removed after they are old enough; try again later."
+        )
 
 
 class InvalidStatusTransitionError(RepositoryError, ValueError):
@@ -153,8 +165,46 @@ class InvestigationRepository:
     lock: both finish, and the stored row is the later one (last write wins).
     """
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self, engine: Engine, owner: str | None = None, owner_limit: int | None = None
+    ) -> None:
         self.engine = engine
+        self._owner = owner
+        self._owner_limit = owner_limit
+
+    def for_owner(self, owner: str | None, limit: int | None = None) -> InvestigationRepository:
+        """A repository on the same database that sees and saves only ``owner``'s rows.
+
+        ``limit`` is the most investigations the owner may have saved. With no
+        owner the repository is unscoped, as the startup sweep and tests use it.
+        """
+        return InvestigationRepository(self.engine, owner, limit)
+
+    def _visible(self, record: InvestigationRecord | None) -> bool:
+        return record is not None and (self._owner is None or record.owner == self._owner)
+
+    def _check_limit(self, session: Session) -> None:
+        if self._owner is None or self._owner_limit is None:
+            return
+        count = session.scalar(
+            select(func.count())
+            .select_from(InvestigationRecord)
+            .where(InvestigationRecord.owner == self._owner)
+        )
+        if (count or 0) >= self._owner_limit:
+            raise InvestigationLimitError(self._owner_limit)
+
+    def delete_expired_anonymous(self, max_age_days: float) -> int:
+        """Delete anonymous investigations older than ``max_age_days``; returns how many."""
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
+        with self._session() as session:
+            result = session.execute(
+                delete(InvestigationRecord).where(
+                    InvestigationRecord.owner.like("anon:%"),
+                    InvestigationRecord.created_at < cutoff,
+                )
+            )
+            return result.rowcount or 0  # type: ignore[attr-defined]
 
     @contextmanager
     def _session(self) -> Iterator[Session]:
@@ -236,11 +286,15 @@ class InvestigationRepository:
         """Save a new investigation. ``body.status``, if given, wins over ``status``."""
         body = InvestigationCreate.model_validate(body.model_dump(exclude_unset=True))
         record = InvestigationRecord(
-            title=body.title, data_mode=data_mode, status=body.status or status
+            title=body.title,
+            data_mode=data_mode,
+            status=body.status or status,
+            owner=self._owner,
         )
         self._apply_request(record, body.request)
         self._apply_result(record, body.result)
         with self._session() as session:
+            self._check_limit(session)
             session.add(record)
             session.flush()
             session.refresh(record)
@@ -270,8 +324,10 @@ class InvestigationRepository:
             question=question,
             selections=selection.model_dump(mode="json") if selection else {},
             run=run.model_dump(mode="json"),
+            owner=self._owner,
         )
         with self._session() as session:
+            self._check_limit(session)
             session.add(record)
             session.flush()
             session.refresh(record)
@@ -403,7 +459,7 @@ class InvestigationRepository:
     def get(self, investigation_id: uuid.UUID) -> Investigation:
         with self._session() as session:
             record = session.get(InvestigationRecord, investigation_id)
-            if record is None:
+            if record is None or not self._visible(record):
                 raise InvestigationNotFoundError(investigation_id)
             return self._to_model(record)
 
@@ -417,7 +473,7 @@ class InvestigationRepository:
         fields = body.model_fields_set
         with self._session() as session:
             record = session.get(InvestigationRecord, investigation_id, with_for_update=True)
-            if record is None:
+            if record is None or not self._visible(record):
                 raise InvestigationNotFoundError(investigation_id)
             if "status" in fields and body.status is not None and body.status != record.status:
                 if body.status not in TRANSITIONS[record.status]:
@@ -447,6 +503,8 @@ class InvestigationRepository:
         query = select(InvestigationRecord).order_by(
             InvestigationRecord.created_at.desc(), InvestigationRecord.id.desc()
         )
+        if self._owner is not None:
+            query = query.where(InvestigationRecord.owner == self._owner)
         if cursor:
             created_at, last_id = _decode_cursor(cursor)
             query = query.where(
