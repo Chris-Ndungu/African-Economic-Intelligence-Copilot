@@ -7,8 +7,11 @@ replays the recordings in ``tests/fixtures/llm/``.
 
 import asyncio
 import json
+import subprocess
+import sys
 
 import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from google.genai import errors as genai_errors
@@ -166,10 +169,22 @@ def test_retries_stop_at_the_limit_with_llm_unavailable():
     assert sleeps == [0.5, 1.0, 2.0]
 
 
-def test_network_errors_are_retried():
-    llm, transport, sleeps = client(httpx.ConnectError("refused"), reply("ok"))
+@pytest.mark.parametrize("error", [httpx2.ConnectError("refused"), httpx.ConnectError("refused")])
+def test_network_errors_are_retried(error):
+    llm, transport, sleeps = client(error, reply("ok"))
     assert generate(llm).text == "ok"
     assert sleeps == [1.0]
+
+
+def test_the_app_imports_without_httpx():
+    """The production image has no dev dependencies, so no httpx (a crash on Render)."""
+    code = (
+        "import sys; sys.modules['httpx'] = None; "
+        "import httpx2, backend.main, copilot_core.llm.gemini as g; "
+        "assert g._NETWORK_ERRORS == (httpx2.HTTPError,)"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("code", [400, 401, 403, 404])
