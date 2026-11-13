@@ -10,10 +10,14 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 
 from backend import api, errors, web
+from backend.caching import CacheControlMiddleware
 from backend.settings import Settings
 from backend.visitor import VisitorMiddleware
 from copilot_core.db import create_db_engine
@@ -76,6 +80,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     errors.install(app)
+    app.add_middleware(CacheControlMiddleware)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def not_found(request: Request, exc: StarletteHTTPException) -> Response:
+        # An unknown path: JSON under /api, the HTML page anywhere else.
+        if exc.status_code != 404:
+            return await http_exception_handler(request, exc)
+        if request.url.path == "/api" or request.url.path.startswith("/api/"):
+            return errors.error_response(404, "not_found", "There is no such endpoint.")
+        return web.templates.TemplateResponse(request, "pages/not_found.html", status_code=404)
+
     app.add_middleware(
         VisitorMiddleware,
         max_age_days=settings.anonymous_retention_days,

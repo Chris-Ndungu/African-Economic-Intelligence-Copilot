@@ -18,6 +18,10 @@ Commands
 - `uv run pytest tests/test_smoke.py` - one test file
 - `uv run uvicorn backend.main:app --reload` - serve the pages and the API at `http://localhost:8000` (API docs at `/docs`)
 - `uv run pytest tests/test_web.py` - the workspace pages, the vendored-file checksums and the OpenAPI contract validation; `api/openapi.yaml` is validated by `uv run pytest`
+- `docker build -t copilot .` - build the production image (root `Dockerfile`: multi-stage, non-root, no dev dependencies, tests or `.env`); it listens on `PORT` (default 8080) and does not run migrations
+- `docker run --rm -e DATABASE_URL=postgresql+psycopg://copilot:copilot@host.docker.internal:5432/copilot copilot alembic upgrade head` - run the migrations as their own step with the production image
+- `docker run --rm -p 8080:8080 -e DATABASE_URL=... copilot` - serve the app at `http://localhost:8080`; `/health` returns 200
+- `uv run pytest tests/test_production_serving.py` - the cache headers and the JSON and HTML 404 pages, without Docker
 - `docker compose up` - build and run Postgres and the app with migrations applied, at `http://localhost:8000`; `docker compose down -v` stops it and deletes the database
 - `docker run -d --name copilot-postgres -e POSTGRES_USER=copilot -e POSTGRES_PASSWORD=copilot -e POSTGRES_DB=copilot -p 5432:5432 postgres:17` - start a local Postgres; then set `DATABASE_URL=postgresql+psycopg://copilot:copilot@localhost:5432/copilot` in `.env` or the shell
 - `uv run alembic upgrade head` - apply the migrations to the database in `DATABASE_URL`; `uv run alembic downgrade base` removes them
