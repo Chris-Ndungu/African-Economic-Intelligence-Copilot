@@ -1,0 +1,122 @@
+name: Deploy prod
+
+# A version tag such as v0.1.0 promotes the image that dev already runs (built
+# by deploy-dev.yml for the tagged commit) to prod. Nothing is rebuilt. The
+# `prod` Environment requires the repository owner's approval and accepts only
+# `v*` tags.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/chris-ndungu/african-economic-intelligence-copilot
+
+jobs:
+  verify:
+    name: Check the tag before asking for approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out with history
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: The tagged commit must be on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main. Tag a commit on main."
+            exit 1
+          fi
+
+      - name: The image for that commit must exist
+        run: |
+          if ! docker manifest inspect "$IMAGE:$GITHUB_SHA" > /dev/null 2>&1; then
+            echo "::error::No image $IMAGE:$GITHUB_SHA. Dev builds it when the commit is merged; wait for Deploy dev to finish for this commit, or tag a commit that has been deployed to dev."
+            exit 1
+          fi
+
+  deploy:
+    name: Migrate and deploy to prod
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    environment:
+      name: prod
+      url: ${{ steps.url.outputs.url }}
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check out the deploy script
+        uses: actions/checkout@v7.0.1
+
+      - name: Check that every secret is set
+        run: .github/scripts/render-deploy.sh check-secrets
+
+      - name: Find the prod URL
+        id: url
+        run: echo "url=$(.github/scripts/render-deploy.sh url)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR with the workflow token
+        uses: docker/login-action@v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add the version tag to the image, without rebuilding
+        id: image
+        run: |
+          docker buildx imagetools create --tag "$IMAGE:$GITHUB_REF_NAME" "$IMAGE:$GITHUB_SHA"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$GITHUB_SHA" --format '{{.Manifest.Digest}}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Record the image prod runs now
+        id: previous
+        run: echo "image=$(.github/scripts/render-deploy.sh previous)" >> "$GITHUB_OUTPUT"
+
+      # A failure here stops the workflow; the running service is untouched.
+      - name: Migrate the prod database
+        run: .github/scripts/render-deploy.sh migrate "$IMAGE:$GITHUB_SHA"
+
+      - name: Deploy and wait until live
+        id: deploy
+        run: echo "id=$(.github/scripts/render-deploy.sh deploy "$IMAGE:$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        run: .github/scripts/render-deploy.sh smoke
+
+      - name: Redeploy the previous image
+        if: failure() && steps.deploy.conclusion != 'skipped' && steps.previous.outputs.image != ''
+        env:
+          PREVIOUS: ${{ steps.previous.outputs.image }}
+        run: .github/scripts/render-deploy.sh deploy "$PREVIOUS"
+
+      - name: Summary
+        if: always()
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+          DEPLOY_ID: ${{ steps.deploy.outputs.id }}
+          URL: ${{ steps.url.outputs.url }}
+        run: |
+          {
+            echo "### Deploy to prod"
+            echo "- Version: \`$GITHUB_REF_NAME\`"
+            echo "- Image digest: \`$DIGEST\`"
+            echo "- Render deploy ID: \`$DEPLOY_ID\`"
+            echo "- URL: $URL"
+          } >> "$GITHUB_STEP_SUMMARY"

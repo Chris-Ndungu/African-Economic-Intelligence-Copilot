@@ -61,6 +61,7 @@ Rules
 Repository layout
 
 - `_docs/` - plan, backlog, process and design documents
+- `render.yaml` - the Render Blueprint for the `copilot-dev` and `copilot-prod` web services; secrets are `sync: false`
 - `Dockerfile` - the production image: one FastAPI process serving pages, static files and the API, run as a non-root user
 - `docker-compose.yml` - the local stack: Postgres and the app, built from `backend/Dockerfile`
 - `docker-compose.e2e.yml` - override of it for the end-to-end tests: stubbed Gemini and a fresh database volume
@@ -118,3 +119,4 @@ Documents
 - [architecture.md](architecture.md) - system design and decisions
 - [data-contract.md](data-contract.md) - available data models, fields and coverage
 - [api.md](api.md) - the OpenAPI contract for the JSON API
+- [deployment.md](deployment.md) - free hosting setup, deploying dev and prod, rollback

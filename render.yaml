@@ -1,0 +1,54 @@
+# Render Blueprint: the two web services, dev and prod. Both run the production
+# image from GHCR on the free plan (see _docs/deployment.md). Secret values are
+# never written here: `sync: false` makes Render ask for them in its dashboard
+# when the Blueprint is first created. Dev and prod share no secret.
+services:
+  - type: web
+    name: copilot-dev
+    runtime: image
+    image:
+      url: ghcr.io/chris-ndungu/african-economic-intelligence-copilot:latest
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: COPILOT_DEPLOYMENT_ENVIRONMENT
+        value: dev
+      - key: LLM_CLIENT
+        value: gemini
+      # Render's proxy appends the client address to X-Forwarded-For; verify the
+      # hop count after the first deploy (see _docs/deployment.md).
+      - key: COPILOT_TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: COPILOT_GEMINI_API_KEY
+        sync: false
+      - key: COPILOT_RATE_LIMIT_SALT
+        sync: false
+
+  - type: web
+    name: copilot-prod
+    runtime: image
+    image:
+      url: ghcr.io/chris-ndungu/african-economic-intelligence-copilot:latest
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: COPILOT_ENVIRONMENT
+        value: prod
+      - key: COPILOT_DEPLOYMENT_ENVIRONMENT
+        value: prod
+      - key: LLM_CLIENT
+        value: gemini
+      - key: COPILOT_TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: COPILOT_GEMINI_API_KEY
+        sync: false
+      - key: COPILOT_RATE_LIMIT_SALT
+        sync: false
