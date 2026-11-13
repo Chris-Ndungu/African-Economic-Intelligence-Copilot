@@ -19,6 +19,9 @@ services:
       LLM_CLIENT: stub
       LLM_STUB_SCENARIO: run_success
       COPILOT_ENVIRONMENT: test
+      # Every journey runs from the same address; the limits are tested separately.
+      COPILOT_RUNS_PER_IP_PER_HOUR: "100000"
+      COPILOT_RUNS_PER_DAY_TOTAL: "100000"
     ports: !override
       - "8010:8000"
     volumes:

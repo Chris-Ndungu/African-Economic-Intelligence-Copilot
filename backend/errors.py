@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from copilot_core.analysis import AnalysisError
 from copilot_core.data import DataUnavailableError, InvalidRequestError
+from copilot_core.rate_limit import RateLimitedError
 from copilot_core.report import InvestigationNotExportableError
 from copilot_core.repository import (
     DatabaseUnavailableError,
@@ -126,6 +127,12 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(InvestigationNotFoundError)
     async def not_found(request: Request, exc: InvestigationNotFoundError) -> JSONResponse:
         return error_response(404, "not_found", str(exc))
+
+    @app.exception_handler(RateLimitedError)
+    async def rate_limited(request: Request, exc: RateLimitedError) -> JSONResponse:
+        response = error_response(429, "rate_limited", str(exc))
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
 
     @app.exception_handler(InvestigationLimitError)
     async def history_full(request: Request, exc: InvestigationLimitError) -> JSONResponse:

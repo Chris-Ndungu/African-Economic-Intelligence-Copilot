@@ -82,6 +82,26 @@ class Settings(BaseSettings):
     anonymous_retention_days: float = Field(default=30.0, gt=0)
     """Anonymous investigations older than this are deleted at startup."""
 
+    runs_per_ip_per_hour: int = Field(default=10, ge=1)
+    """Investigations one anonymous client may run per hour (`429` over it)."""
+
+    runs_per_day_total: int = Field(default=200, ge=1)
+    """Investigations all visitors together may run per day (`429` over it)."""
+
+    authenticated_runs_per_hour: int = Field(default=60, ge=1)
+    """The higher hourly limit of an authenticated live-mode user (#50)."""
+
+    trusted_proxy_hops: int = Field(default=0, ge=0)
+    """Proxies in front of the app that append to `X-Forwarded-For`.
+
+    0 ignores the header: the client is the TCP peer. On Cloud Run set 1, so
+    the client is the entry Google's front end appended, which a client cannot
+    forge; entries before it are client-supplied and ignored.
+    """
+
+    rate_limit_salt: SecretStr | None = None
+    """Salt for the hashed client keys of the rate limit."""
+
     environment: Literal["local", "test", "prod"] = "local"
     """Where the app runs (`COPILOT_ENVIRONMENT`); `prod` refuses the stub client."""
 

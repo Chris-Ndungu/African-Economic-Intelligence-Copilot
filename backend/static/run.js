@@ -138,3 +138,15 @@
     if (!box) clearTimeout(timer);
   });
 })();
+
+// A refused run (409 history full, 429 rate limit) answers with the run form
+// and its message; swap it in like any other answer.
+(function () {
+  document.addEventListener("htmx:beforeSwap", function (event) {
+    var status = event.detail.xhr && event.detail.xhr.status;
+    if (status === 409 || status === 429) {
+      event.detail.shouldSwap = true;
+      event.detail.isError = false;
+    }
+  });
+})();

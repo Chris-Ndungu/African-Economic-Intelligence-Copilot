@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic.json_schema import SkipJsonSchema
 
 from backend.dependencies import (
+    enforce_run_limit,
     get_app_meta,
     get_data_service,
     get_investigation_service,
@@ -167,7 +168,9 @@ def save_investigation(
 )
 async def run_investigation(body: InvestigationRunRequest, request: Request) -> Investigation:
     """Runs an investigation inside the request and returns it saved as `succeeded`."""
-    investigation = await service(request).run_new(body)
+    runs = service(request)
+    await run_in_threadpool(enforce_run_limit, request)
+    investigation = await runs.run_new(body)
     if investigation.status != "succeeded":
         raise RunFailedError(investigation)
     return investigation
@@ -184,7 +187,9 @@ def create_investigation_run(
     body: InvestigationRunRequest, request: Request, response: Response
 ) -> InvestigationRunAccepted:
     """Saves an investigation as `pending`; its event stream runs it."""
-    investigation = service(request).create(body)
+    runs = service(request)
+    enforce_run_limit(request)
+    investigation = runs.create(body)
     events_url = f"/api/investigations/{investigation.id}/events"
     response.headers["Location"] = events_url
     return InvestigationRunAccepted(id=investigation.id, status="pending", events_url=events_url)
