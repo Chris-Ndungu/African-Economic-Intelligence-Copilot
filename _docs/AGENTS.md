@@ -72,6 +72,7 @@ Repository layout
 - `tests/` - all Python tests, run with `uv run pytest`
 - `main.py` - placeholder entry point from `uv init`
 - `migrations/` - Alembic migrations; the database schema changes only through a new migration here
+- `observability/` - the Grafana dashboard (`dashboards/`) and its provisioning (`provisioning/`) for the local stack
 - `pyproject.toml` - project metadata, dependencies and pytest settings
 - `uv.lock` - locked dependency versions, updated by `uv`
 - `README.md` - project overview, setup and test commands
