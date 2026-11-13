@@ -26,7 +26,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-import httpx
+import httpx2
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -42,6 +42,17 @@ from copilot_core.llm.errors import (
     LLMUnavailable,
 )
 from copilot_core.llm.types import LLMResponse, Message, ToolCall, ToolDeclaration, Usage
+
+# google-genai sends requests with httpx2, a runtime dependency of the SDK. It
+# also accepts httpx when that is installed (only the dev group has it), and
+# the two packages' errors are unrelated classes, so catch both when present.
+_NETWORK_ERRORS: tuple[type[Exception], ...] = (httpx2.HTTPError,)
+try:
+    import httpx
+except ImportError:  # the production image has no httpx
+    pass
+else:
+    _NETWORK_ERRORS += (httpx.HTTPError,)
 
 __all__ = [
     "DEFAULT_MODEL",
@@ -168,7 +179,7 @@ class GeminiClient:
                 error = self._map_api_error(exc)
                 if not isinstance(error, LLMUnavailable) or attempt >= self.config.max_retries:
                     raise error from None
-            except httpx.HTTPError as exc:
+            except _NETWORK_ERRORS as exc:
                 error = LLMUnavailable(self._redact(f"Gemini could not be reached: {exc}"))
                 if attempt >= self.config.max_retries:
                     raise error from None
