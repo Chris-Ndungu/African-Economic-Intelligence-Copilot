@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from opentelemetry.sdk.trace.export import SpanExporter
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend import api, errors, web
+from backend import api, errors, otlp, web
 from backend.caching import CacheControlMiddleware
 from backend.logging_config import configure_logging
 from backend.settings import Settings
@@ -109,6 +109,7 @@ def create_app(
 
     app.include_router(api.router)
     app.include_router(web.router)
+    app.include_router(otlp.router)
     app.mount("/static", StaticFiles(directory=web.STATIC_DIR), name="static")
 
     setup_telemetry(app, settings, span_exporter)

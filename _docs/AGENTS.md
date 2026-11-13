@@ -31,6 +31,7 @@ Commands
 - `docker compose up`, then open Grafana at `http://localhost:3000` (anonymous admin) -> Explore -> the Tempo data source -> Search, service name `copilot-api`: every API request except `/health` is a trace with its method, route and status. Without `OTEL_EXPORTER_OTLP_ENDPOINT` the app exports nothing; the stack's OTLP ports are 4317 (gRPC) and 4318 (HTTP)
 - Grafana -> Dashboards -> Copilot -> Investigation health: investigations per minute by outcome, failure rate, p50/p95 latency, Gemini p95 latency, tokens per hour and the unverified-claim rate; it is provisioned from `observability/dashboards/investigation.json` by `docker compose up`
 - `uv run pytest tests/test_metrics.py tests/test_tracing_and_logs.py` - the metrics (in-memory reader), the span tree and the check that no key, password or question reaches a span or a log
+- Clicking Run investigation in the workspace sends a `traceparent` header and one `ui.run_investigation` span (service `copilot-web`) through the same-origin `POST /otlp/v1/traces`, which the API forwards to the collector, so one trace runs from the browser to the database; `uv run pytest tests/test_frontend_tracing.py` checks it
 - `uv run pytest tests/test_telemetry.py` - the tracing tests, with an in-memory span exporter
 - `docker rm -f copilot-postgres` - stop and remove the local Postgres
 - `uv run playwright install chromium` - install the browser the end-to-end tests drive; once per machine

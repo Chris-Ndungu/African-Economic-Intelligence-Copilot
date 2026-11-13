@@ -31,6 +31,7 @@ from backend.dependencies import (
     get_investigation_service,
     get_repository,
 )
+from backend.tracecontext import adopt_traceparent, current_traceparent
 from copilot_core.data import DataError, DataService, DataUnavailableError
 from copilot_core.error_messages import error_message, message_table
 from copilot_core.events import FailedEvent, Heartbeat, InProgressEvent, ProgressEvent, SavedEvent
@@ -343,8 +344,12 @@ def _run_form_response(
 
 
 def _progress_page(request: Request, investigation_id: uuid.UUID) -> HTMLResponse:
+    """The progress partial; its stream URL carries the trace context, never the question."""
+    traceparent = current_traceparent(request.headers.get("traceparent"))
     return templates.TemplateResponse(
-        request, "partials/run_progress.html", {"investigation_id": investigation_id}
+        request,
+        "partials/run_progress.html",
+        {"investigation_id": investigation_id, "traceparent": traceparent},
     )
 
 
@@ -455,7 +460,11 @@ async def _only_outcome(kind: str) -> AsyncIterator[str]:
 
 
 @router.get("/partials/investigations/{investigation_id}/progress")
-async def progress_stream(request: Request, investigation_id: str) -> StreamingResponse:
+async def progress_stream(
+    request: Request,
+    investigation_id: str,
+    traceparent: Annotated[str | None, Query()] = None,
+) -> StreamingResponse:
     """Run a pending investigation and stream its progress as HTML fragments.
 
     A thin route over the same iterator as the JSON stream: it claims the
@@ -463,6 +472,9 @@ async def progress_stream(request: Request, investigation_id: str) -> StreamingR
     An unknown ID or an unavailable database is answered inside the stream
     with ``200``, so the browser shows the message instead of reconnecting.
     """
+    # EventSource cannot send headers: a valid trace context in the URL makes the
+    # run a child of the browser's trace; anything else starts a new trace.
+    adopt_traceparent(traceparent)
     try:
         runs = get_investigation_service(request)
         investigation = await run_in_threadpool(runs.get, uuid.UUID(investigation_id))

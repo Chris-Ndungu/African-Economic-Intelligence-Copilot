@@ -39,7 +39,7 @@ from backend.logging_config import LOGGERS, RedactFilter
 from backend.settings import Settings
 from copilot_core.telemetry import tracer_provider_var
 
-EXCLUDED_URLS = "/health"
+EXCLUDED_URLS = "/health,/otlp/"
 EXPORT_LOGGERS = ("opentelemetry.exporter.otlp.proto.http.trace_exporter", "opentelemetry.sdk")
 QUIET_SECONDS = 60.0
 

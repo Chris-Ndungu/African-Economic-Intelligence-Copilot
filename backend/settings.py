@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     otlp_endpoint: str | None = Field(default=None, validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT")
     """OTLP collector URL; unset means no telemetry is exported."""
 
+    otlp_headers: SecretStr | None = Field(
+        default=None, validation_alias="OTEL_EXPORTER_OTLP_HEADERS"
+    )
+    """Auth headers for the collector, `key=value,...`; added on the server only, never sent to a browser."""
+
     otel_service_name: str = Field(default="copilot-api", validation_alias="OTEL_SERVICE_NAME")
     """The `service.name` of this process's telemetry."""
 
@@ -133,7 +138,9 @@ class Settings(BaseSettings):
             )
         return self
 
-    @field_validator("database_url", "gemini_api_key", "otlp_endpoint", mode="before")
+    @field_validator(
+        "database_url", "gemini_api_key", "otlp_endpoint", "otlp_headers", mode="before"
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
