@@ -93,6 +93,18 @@ def test_a_field_path_without_the_result_prefix_is_accepted():
     assert verified("The trend was 4.27%.", [cite(4.27, "slope.value")])
 
 
+def test_a_series_point_cited_under_the_result_prefix_is_accepted():
+    # Seen on dev: Gemini cited series points as result.series..., but series
+    # sits beside result in the data, not inside it.
+    assert verified("It was 7.6% in 2022.", [cite(7.6, "result.series.0.points.0.value")])
+    assert verified("It was 7.6% in 2022.", [cite(7.6, "series.0.points.0.value")])
+
+
+def test_a_wrong_value_under_a_corrected_path_is_still_unverified():
+    found = reasons("It was 7.7% in 2022.", [cite(7.7, "result.series.0.points.0.value")])
+    assert found and "7.7" in found[0]
+
+
 def test_a_missing_field_is_unverified():
     assert "not in r1" in reasons("Value 7.6.", [cite(7.6, "result.missing.value")])[0]
 
