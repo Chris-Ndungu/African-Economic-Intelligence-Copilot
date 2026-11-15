@@ -84,7 +84,7 @@ def test_a_script_end_tag_in_a_title_or_source_cannot_break_out():
     assert "<script>alert(1)" not in html
     assert len(re.findall(r"</script>", html)) == 1
     payload = re.search(r'class="chart-data">(.*?)</script>', html).group(1)
-    assert json.loads(payload)["layout"]["title"]["text"] == evil
+    assert "title" not in json.loads(payload)["layout"]  # the figcaption shows it, escaped
     assert "&lt;/script&gt;" in html  # the source name, as escaped text
 
 

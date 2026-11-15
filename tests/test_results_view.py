@@ -140,3 +140,36 @@ def test_start_from_these_selections_posts_the_investigation_selections():
         "2018",
         "2020",
     ]
+
+
+# --- Readable labels for cited numbers -------------------------------------------
+
+TREND = {
+    "result": {
+        "level_change": {"value": -2.4, "period": {"start": "2014", "end": "2024"}},
+        "points": [{"period": {"start": "2024", "end": "2024"}, "baseline_mean": 6.44}],
+    },
+    "series": [{"metric": "PCPIPCH", "points": [{"period": "2014", "value": 6.9}]}],
+}
+
+
+def label(field):
+    from copilot_core.findings_view import number_label
+    from copilot_core.schemas import ToolResult
+
+    return number_label(field, ToolResult(result_id="r2", tool="t", arguments={}, data=TREND))
+
+
+def test_a_cited_number_is_labelled_by_name_and_period_not_by_path():
+    assert label("result.level_change.value") == "Level change, 2014–2024"
+    assert label("level_change.value") == "Level change, 2014–2024"
+    assert label("result.points.0.baseline_mean") == "Baseline mean, 2024"
+
+
+def test_a_data_point_is_labelled_with_its_indicator_and_period():
+    assert label("series.0.points.0.value") == "PCPIPCH, 2014"
+    assert label("result.series.0.points.0.value") == "PCPIPCH, 2014"
+
+
+def test_an_unknown_field_keeps_its_path():
+    assert label("result.nothing.value") == "result.nothing.value"

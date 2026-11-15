@@ -168,7 +168,13 @@ def detect_anomalies(
     scored = sum(p.status != "not_scored" for p in points)
     flagged_total = sum(p.status == "flagged" for p in points)
     if scored and not flagged_total:
-        caveats.append(f"No anomalies: {scored} values were scored and none was flagged.")
+        noun = "value was" if scored == 1 else "values were"
+        caveats.append(f"No anomalies: {scored} {noun} scored and none was flagged.")
+    if scored and scored < window:
+        caveats.append(
+            f"Only {scored} of {len(points)} periods could be scored, because each needs "
+            f"{window} earlier periods. Choose an earlier start for a fuller check."
+        )
     elif not scored:
         caveats.append("No value could be scored, so the series could not be checked.")
     return AnomalyResult(

@@ -278,7 +278,8 @@ def _interpretation_card(
         unverified_reasons=reasons if unverified else [],
         relationship=_is_relationship(evidence),
         numbers=[
-            NumberView(n.value, n.unit, f"{n.result_id} · {n.field}") for n in finding.numbers
+            NumberView(n.value, n.unit, number_label(n.field, by_id.get(n.result_id)))
+            for n in finding.numbers
         ],
         methods=evidence.methods,
         tools=evidence.tools,
@@ -287,6 +288,68 @@ def _interpretation_card(
         missing_notes=evidence.missing_notes,
         chart_ids=chart_ids,
     )
+
+
+_PATH_WORDS = {"result", "series", "points", "value", "growth"}
+
+
+def _period_text(period: Any) -> str | None:
+    if isinstance(period, str):
+        return period
+    if isinstance(period, dict) and period.get("start"):
+        start, end = str(period["start"]), str(period.get("end") or period["start"])
+        return start if start == end else f"{start}–{end}"
+    return None
+
+
+def _walk(data: Any, field: str) -> list[Any] | None:
+    """The nodes along ``field``, trying the spellings the claim check accepts."""
+    candidates = [field, f"result.{field}"]
+    if field.startswith("result."):
+        candidates.append(field.removeprefix("result."))
+    for candidate in candidates:
+        node, nodes = data, [data]
+        for part in candidate.split("."):
+            if isinstance(node, dict) and part in node:
+                node = node[part]
+            elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+                node = node[int(part)]
+            else:
+                break
+            nodes.append(node)
+        else:
+            return nodes
+    return None
+
+
+def number_label(field: str, result: ToolResult | None) -> str:
+    """A readable name for a cited number, such as "Level change, 2014–2024".
+
+    Built from the cited field and the result it points into: the last named
+    step of the path (or the series' indicator for a plain data point) and the
+    period of the nearest node that has one. Falls back to the raw path when
+    the field cannot be found.
+    """
+    nodes = _walk(result.data, field) if result is not None else None
+    if nodes is None:
+        return field
+    names = [p for p in field.split(".") if not p.isdigit() and p not in _PATH_WORDS]
+    name = names[-1].replace("_", " ").capitalize() if names else None
+    if name is None:
+        metric = next(
+            (n["metric"] for n in reversed(nodes) if isinstance(n, dict) and n.get("metric")),
+            None,
+        )
+        name = str(metric) if metric else "Value"
+    period = next(
+        (
+            text
+            for n in reversed(nodes)
+            if isinstance(n, dict) and (text := _period_text(n.get("period")))
+        ),
+        None,
+    )
+    return f"{name}, {period}" if period else name
 
 
 def _countries(investigation: Investigation) -> list[str]:

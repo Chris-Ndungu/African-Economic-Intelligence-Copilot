@@ -442,7 +442,7 @@ def test_charts_are_distinguishable_without_colour():
     from copilot_core.figures import line_figure
 
     series = [make_series([1.0, 2.0], country="KEN"), make_series([2.0, 3.0], country="NGA")]
-    traces = line_figure(series, "t")["data"]
+    traces = line_figure(series)["data"]
 
     assert len({t["line"]["dash"] for t in traces}) == 2
     assert len({t["marker"]["symbol"] for t in traces}) == 2
