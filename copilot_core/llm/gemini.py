@@ -24,7 +24,7 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import httpx2
 from google import genai
@@ -87,15 +87,25 @@ def live_gemini_allowed() -> bool:
     return "pytest" not in sys.modules or os.environ.get("RUN_LIVE_GEMINI") == "1"
 
 
+ThinkingLevel = Literal["minimal", "low", "medium", "high"]
+
+TIMEOUT_RETRIES = 1
+"""A timed-out call is retried this many times, within ``max_retries``."""
+
+
 @dataclass(frozen=True)
 class GeminiConfig:
     """Settings for :class:`GeminiClient`, filled from the app settings."""
 
     api_key: SecretStr | None = None
     model: str = DEFAULT_MODEL
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 60.0
     max_retries: int = 3
     max_output_tokens: int = 4096
+    thinking_level: ThinkingLevel = "low"
+    """How much Gemini reasons before answering. Gemini 3 defaults to high, which
+    can take longer than the timeout; choosing tools and describing numbers that
+    Python computed needs little reasoning."""
     backoff_seconds: float = 1.0
     """The first retry waits this long; each later one waits twice as long."""
 
@@ -159,6 +169,9 @@ class GeminiClient:
         config = types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=self.config.max_output_tokens,
+            thinking_config=types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel(self.config.thinking_level.upper())
+            ),
             tools=[types.Tool(function_declarations=[_declaration(t) for t in tools])]
             if tools
             else None,
@@ -166,6 +179,8 @@ class GeminiClient:
             response_json_schema=response_schema.model_json_schema() if response_schema else None,
         )
         attempt = 0
+        timeouts = 0
+        error: LLMError
         while True:
             started = time.perf_counter()
             try:
@@ -174,9 +189,12 @@ class GeminiClient:
                         model=self.config.model, contents=contents, config=config
                     )
             except TimeoutError:
-                raise LLMTimeout(
+                error = LLMTimeout(
                     f"Gemini did not answer within {self.config.timeout_seconds:g} seconds"
-                ) from None
+                )
+                timeouts += 1
+                if timeouts > TIMEOUT_RETRIES or attempt >= self.config.max_retries:
+                    raise error from None
             except genai_errors.APIError as exc:
                 error = self._map_api_error(exc)
                 if not isinstance(error, LLMUnavailable) or attempt >= self.config.max_retries:

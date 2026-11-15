@@ -16,7 +16,7 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from copilot_core.data import DEFAULT_DATA_DIR
-from copilot_core.llm.gemini import DEFAULT_MODEL, GeminiConfig
+from copilot_core.llm.gemini import DEFAULT_MODEL, GeminiConfig, ThinkingLevel
 
 
 class Settings(BaseSettings):
@@ -52,11 +52,14 @@ class Settings(BaseSettings):
     gemini_model: str = DEFAULT_MODEL
     """The Gemini model; the default is the current stable Flash model."""
 
-    gemini_timeout_seconds: float = Field(default=30.0, gt=0)
-    """Longest wait for one Gemini call."""
+    gemini_timeout_seconds: float = Field(default=60.0, gt=0)
+    """Longest wait for one Gemini call; a timed-out call is retried once."""
 
     gemini_max_retries: int = Field(default=3, ge=0)
-    """Retries of a rate-limited (429) or server-error (5xx) Gemini call."""
+    """Retries of a rate-limited (429), server-error (5xx), unreachable or timed-out Gemini call."""
+
+    gemini_thinking_level: ThinkingLevel = "low"
+    """How much Gemini reasons before answering: minimal, low, medium or high."""
 
     gemini_max_output_tokens: int = Field(default=4096, gt=0)
     """Output token limit of one Gemini call."""
@@ -152,4 +155,5 @@ class Settings(BaseSettings):
             timeout_seconds=self.gemini_timeout_seconds,
             max_retries=self.gemini_max_retries,
             max_output_tokens=self.gemini_max_output_tokens,
+            thinking_level=self.gemini_thinking_level,
         )

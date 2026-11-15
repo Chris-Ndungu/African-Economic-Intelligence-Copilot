@@ -196,10 +196,49 @@ def test_other_client_errors_are_not_retried(code):
     assert sleeps == []
 
 
-def test_a_slow_call_raises_llm_timeout():
-    llm, transport, _ = client(reply(), delay=1.0, timeout_seconds=0.05)
+def test_a_slow_call_is_retried_once_then_raises_llm_timeout():
+    llm, transport, sleeps = client(reply(), delay=1.0, timeout_seconds=0.05)
     with pytest.raises(LLMTimeout, match="0.05 seconds"):
         generate(llm)
+    assert len(transport.calls) == 2  # the first call and one retry
+    assert sleeps == [1.0]
+
+
+def test_a_timed_out_call_that_answers_on_retry_succeeds():
+    class SlowOnce(FakeTransport):
+        async def generate_content(self, *, model, contents, config):
+            if not self.calls:
+                self.calls.append(None)
+                await asyncio.sleep(1.0)
+            return await super().generate_content(model=model, contents=contents, config=config)
+
+    llm = GeminiClient(
+        GeminiConfig(api_key=SecretStr(KEY), timeout_seconds=0.05, backoff_seconds=0),
+        transport=SlowOnce(reply("late but fine")),
+        sleep=lambda _: asyncio.sleep(0),
+    )
+    assert generate(llm).text == "late but fine"
+
+
+def test_a_timeout_is_not_retried_when_retries_are_off():
+    llm, transport, _ = client(reply(), delay=1.0, timeout_seconds=0.05, max_retries=0)
+    with pytest.raises(LLMTimeout):
+        generate(llm)
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize("level", ["minimal", "low", "medium", "high"])
+def test_every_call_sends_the_thinking_level(level):
+    llm, transport, _ = client(reply(), thinking_level=level)
+    generate(llm)
+    thinking = transport.calls[0]["config"].thinking_config
+    assert thinking.thinking_level == types.ThinkingLevel(level.upper())
+
+
+def test_thinking_is_low_by_default():
+    settings = Settings(_env_file=None)
+    assert settings.gemini_config().thinking_level == "low"
+    assert settings.gemini_config().timeout_seconds == 60.0
 
 
 def test_a_blocked_prompt_raises_llm_blocked():
