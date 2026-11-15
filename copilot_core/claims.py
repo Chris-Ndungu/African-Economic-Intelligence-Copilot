@@ -180,6 +180,29 @@ def _resolve(data: Any, path: str) -> Any:
     return node
 
 
+_MISSING = object()
+
+
+def _resolve_field(data: Any, field: str) -> Any:
+    """The value at ``field``, or ``_MISSING``.
+
+    A result's data has ``result`` (the computed numbers) and, for some tools,
+    ``series`` (the data points) side by side. Gemini cites paths with or
+    without the ``result.`` prefix, sometimes on the wrong key, for example
+    ``result.series.0.points.0.value``; each spelling is tried, and the value
+    found must still match the cited number exactly.
+    """
+    candidates = [field, f"result.{field}"]
+    if field.startswith("result."):
+        candidates.append(field.removeprefix("result."))
+    for candidate in candidates:
+        try:
+            return _resolve(data, candidate)
+        except KeyError:
+            continue
+    return _MISSING
+
+
 def _leaves(data: Any) -> Iterator[Any]:
     if isinstance(data, dict):
         for value in data.values():
@@ -227,16 +250,12 @@ class _Checker:
         result = self.results.get(number.result_id)
         if result is None:
             return check(False, "unknown result")
-        try:
-            actual = _resolve(result.data, number.field)
-        except KeyError:
-            try:
-                actual = _resolve(result.data, f"result.{number.field}")
-            except KeyError:
-                missing = f"field {number.field} not in {number.result_id}"
-                return check(
-                    False, missing if self.anywhere(number.value) else "not in any tool result"
-                )
+        actual = _resolve_field(result.data, number.field)
+        if actual is _MISSING:
+            missing = f"field {number.field} not in {number.result_id}"
+            return check(
+                False, missing if self.anywhere(number.value) else "not in any tool result"
+            )
         if isinstance(actual, str) and period_frequency(actual):
             same = actual == repr(number.value).removesuffix(".0")
             return check(same, None if same else f"{number.field} is {actual}")
