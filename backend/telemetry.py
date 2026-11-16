@@ -15,12 +15,13 @@ import threading
 import time
 
 from fastapi import FastAPI
-from opentelemetry import metrics
+from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation import sqlalchemy as _sqlalchemy_tracing
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.instrumentation.sqlalchemy.engine import EngineTracer
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -112,13 +113,22 @@ def _export_metrics(resource: Resource, settings: Settings) -> None:
 
 
 def instrument_engine(app: FastAPI, engine: Engine) -> None:
-    """Trace the SQL of ``engine`` when tracing is on. Statements keep their placeholders."""
+    """Trace the SQL of ``engine`` when tracing is on. Statements keep their placeholders.
+
+    Only this engine's events are hooked. ``SQLAlchemyInstrumentor().instrument()``
+    also patches ``sqlalchemy.ext.asyncio``, whose import needs ``greenlet``;
+    SQLAlchemy 2.1 no longer installs it and the production image has none, so
+    that call failed on the first database request.
+    """
     provider = getattr(app.state, "tracer_provider", None)
     if provider is not None:
-        # SQLAlchemy 2.1 is newer than the range the instrumentor declares; its engine events are unchanged.
-        SQLAlchemyInstrumentor().instrument(
-            engine=engine, tracer_provider=provider, skip_dep_check=True
+        tracer = trace.get_tracer(_sqlalchemy_tracing.__name__, tracer_provider=provider)
+        connections = metrics.get_meter(_sqlalchemy_tracing.__name__).create_up_down_counter(
+            name="db.client.connections.usage",
+            unit="connections",
+            description="The number of connections in the state given by the state attribute.",
         )
+        EngineTracer(tracer, engine, connections)
 
 
 def setup_telemetry(

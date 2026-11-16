@@ -8,11 +8,16 @@ with the reason, when ``DATABASE_URL`` is not set.
 import json
 import logging
 import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from memory_repository import MemoryRepository
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from sqlalchemy import create_engine, text
 
 from backend.logging_config import JsonFormatter
 from backend.main import create_app
@@ -164,6 +169,48 @@ def test_the_redaction_drops_names_that_look_like_secrets():
     assert safe_attributes({"question": "x", "tool.name": "trend", "none": None}) == {
         "tool.name": "trend"
     }
+
+
+def test_an_instrumented_engine_traces_its_sql_without_postgres():
+    exporter = InMemorySpanExporter()
+    app = make_app(exporter)
+    engine = create_engine("sqlite://")
+    instrument_engine(app, engine)
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1 WHERE 1 = :one"), {"one": 1})
+    statements = [s.attributes.get("db.statement") for s in exporter.get_finished_spans()]
+    assert "SELECT 1 WHERE 1 = ?" in statements
+
+
+def test_instrumenting_the_engine_does_not_need_greenlet():
+    """Production has no greenlet; importing sqlalchemy.ext.asyncio fails there.
+
+    Tracing the engine used to patch that module and turned every database
+    request into a 500. Run in a subprocess so blocking greenlet affects no other test.
+    """
+    script = textwrap.dedent(
+        """
+        import sys
+        sys.modules["greenlet"] = None
+        from fastapi import FastAPI
+        from opentelemetry.sdk.trace import TracerProvider
+        from sqlalchemy import create_engine, text
+        from backend.telemetry import instrument_engine
+
+        app = FastAPI()
+        app.state.tracer_provider = TracerProvider()
+        engine = create_engine("sqlite://")
+        instrument_engine(app, engine)
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        assert "sqlalchemy.ext.asyncio" not in sys.modules
+        """
+    )
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=root, capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_sql_spans_keep_placeholders_and_never_the_question(migrated):
