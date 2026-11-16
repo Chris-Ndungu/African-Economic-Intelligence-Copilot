@@ -13,8 +13,8 @@ only numbers it can check against the computed results.
 **Try it:** <https://copilot-prod.onrender.com> (sample data; no sign-up).
 It runs on free services, so expect two limits:
 
-- The service sleeps when idle, so the first load after a pause can take up
-  to a minute.
+- The service sleeps when idle, so the first load after a pause can take
+  up to a minute.
 - Gemini's free tier allows only a few investigations a day. When the day's
   quota is used up, runs say "Gemini is unavailable"; try again the next day,
   or run it locally with your own key (below).
@@ -92,7 +92,7 @@ and [architecture](_docs/architecture.md).
 DuckDB, PostgreSQL with SQLAlchemy and Alembic, the Gemini API (`google-genai`),
 Plotly, WeasyPrint, OpenTelemetry, Docker, GitHub Actions, Render and Neon.
 
-## Run it locally
+## Run locally
 
 ### With Docker (one command)
 
@@ -161,7 +161,7 @@ frontend, QA, ops), working from groomed GitHub issues with acceptance
 criteria, one pull request per phase.
 
 - [Product plan](_docs/plan.md): scope, decisions and acceptance criteria
-- [Task board](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/issues) and [backlog](_docs/task.md)
+- Project board: [GitHub issues](https://github.com/Chris-Ndungu/African-Economic-Intelligence-Copilot/issues) and the [backlog](_docs/task.md)
 - [Agent team](_docs/agent-team.md) and [process](_docs/process.md)
 - [Agent instructions](_docs/AGENTS.md): the context every agent session loads
 - [Architecture](_docs/architecture.md), [API](_docs/api.md) and [data contract](_docs/data-contract.md)
