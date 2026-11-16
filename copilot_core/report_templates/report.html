@@ -28,6 +28,12 @@
   dl.facts { margin: 6pt 0; overflow: hidden; }
   dl.facts dt { float: left; clear: left; width: 30mm; font-weight: bold; }
   dl.facts dd { margin: 0 0 2pt 32mm; }
+  /* Cited numbers: label and value in two table columns, so a long label wraps
+     inside its own column instead of running into the value. */
+  dl.numbers { display: table; margin: 4pt 0; border-spacing: 0 1pt; }
+  dl.numbers > div { display: table-row; }
+  dl.numbers dt, dl.numbers dd { display: table-cell; margin: 0; padding-right: 8pt; }
+  dl.numbers dt { font-weight: bold; }
   .question { font-size: 11pt; margin: 6pt 0; }
   article { border: 0.5pt solid #bbb; padding: 6pt 8pt; margin: 6pt 0; break-inside: avoid; }
   article.hypothesis { border-style: dashed; }
@@ -72,7 +78,7 @@
     {% if card.hypothesis %}<span class="label label-hypothesis">Hypothesis</span>
     {% else %}<span class="label label-fact">Observed fact</span>{% endif %}
     {% if card.unverified %}<span class="label label-unverified">Unverified</span>{% endif %}
-    <span class="kind">{{ card.kind }}</span>
+    {% if card.kind not in ("fact", "hypothesis") %}<span class="kind">{{ card.kind }}</span>{% endif %}
   </p>
   <p class="statement">{{ card.statement }}</p>
   {% if card.unverified %}
@@ -82,10 +88,10 @@
   </div>
   {% endif %}
   {% if card.numbers %}
-  <dl class="facts">
+  <dl class="numbers">
     {% for n in card.numbers %}
-    <dt>{{ n.label or "Value" }}</dt>
-    <dd>{{ n.value|number(n.unit) }}{% if n.value is not none %} {{ n.unit }}{% endif %}</dd>
+    <div><dt>{{ n.label or "Value" }}</dt>
+    <dd>{{ n.value|number(n.unit) }}{% if n.value is not none %} {{ n.unit }}{% endif %}</dd></div>
     {% endfor %}
   </dl>
   {% endif %}

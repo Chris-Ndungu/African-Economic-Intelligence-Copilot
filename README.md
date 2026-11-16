@@ -7,7 +7,7 @@ An AI-powered economic investigation workspace for analysts studying African eco
 ## Live demo
 
 - Public demo (prod): <https://copilot-prod.onrender.com>
-- Dev: <https://copilot-dev.onrender.com>
+- Dev: <https://copilot-dev-ze5l.onrender.com>
 
 Both run on free Render services that sleep when idle, so the first load after
 a pause can take up to a minute. Deployment is described in

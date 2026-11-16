@@ -37,8 +37,8 @@ The documentation does not state in one sentence that free instances may run
 image services, so the final confirmation is the first deploy in "Deploy dev
 by hand" below. **Record the result here after that deploy:**
 
-- Free service runs a GHCR image: _not yet confirmed_
-- Deploy hook accepts `imgURL`: _not yet confirmed_
+- Free service runs a GHCR image: **yes**, confirmed on 2026-11-13 (`copilot-dev`, free plan)
+- Deploy hook accepts `imgURL`: **yes**, confirmed on 2026-11-13 by the Deploy dev workflow
 
 ### Fallback if either answer is no
 
@@ -150,14 +150,15 @@ Do this once, before relying on the workflow.
      after a reload. One that runs up to 90 seconds streams to the end through
      Render's proxy without being buffered.
    - Export it as PDF. Record here whether charts render or show "Chart could not be
-     rendered" within 512 MB: _not yet recorded_.
+     rendered" within 512 MB: **charts render**, checked on 2026-11-15 with a trend and an anomaly chart.
    - Set an invalid Gemini key in Render, redeploy, run: the Gemini-unavailable
      message appears, not a failure page. Restore the key.
    - Render's logs contain no secret values.
    - Look at `X-Forwarded-For` behaviour: from two networks, runs must count
      against separate rate limits. If they share one, change
      `COPILOT_TRUSTED_PROXY_HOPS`.
-5. Record the dev URL here. Expected: <https://copilot-dev.onrender.com> (_confirm after step 3_).
+5. Record the dev URL here: <https://copilot-dev-ze5l.onrender.com>. Render adds a
+   suffix when a service name is already taken, so read the URL from the service page.
 
 Settings in Render: `COPILOT_DEPLOYMENT_ENVIRONMENT=dev` (the setting
 `COPILOT_ENVIRONMENT` only accepts `local`, `test` and `prod`, so dev leaves it

@@ -114,16 +114,16 @@ def _single_unit(units: Sequence[str]) -> str:
     return distinct[0] if distinct else ""
 
 
-def _layout(title: str, unit: str, frequency: str) -> dict[str, Any]:
+def _layout(unit: str, frequency: str) -> dict[str, Any]:
+    # No title: the page and the report show it above the chart already.
     return {
-        "title": {"text": title, "font": {"size": 14, "color": TEXT_COLOUR}, "x": 0.01},
         "paper_bgcolor": "#ffffff",
         "plot_bgcolor": "#ffffff",
         "font": {"color": TEXT_COLOUR},
         "xaxis": {"title": {"text": f"Period ({frequency})"}, "type": "category"},
         "yaxis": {"title": {"text": unit}, "zeroline": False},
         "legend": {"orientation": "h", "y": -0.3},
-        "margin": {"l": 64, "r": 16, "t": 48, "b": 40},
+        "margin": {"l": 64, "r": 16, "t": 16, "b": 40},
         "hovermode": "closest",
         "autosize": True,
     }
@@ -133,7 +133,7 @@ def _has_values(values: Sequence[float | None]) -> bool:
     return any(v is not None for v in values)
 
 
-def line_figure(series: Sequence[SeriesResult], title: str) -> dict[str, Any]:
+def line_figure(series: Sequence[SeriesResult]) -> dict[str, Any]:
     """One line per country, on one axis titled with the unit.
 
     Raises :class:`MixedUnitsError` if the series use different units.
@@ -167,10 +167,10 @@ def line_figure(series: Sequence[SeriesResult], title: str) -> dict[str, Any]:
             }
         )
     frequency = series[0].period.frequency if series else "annual"
-    return {"data": traces, "layout": _layout(title, unit, frequency)}
+    return {"data": traces, "layout": _layout(unit, frequency)}
 
 
-def anomaly_figure(result: AnomalyResult, title: str) -> dict[str, Any]:
+def anomaly_figure(result: AnomalyResult) -> dict[str, Any]:
     """The series line, plus a marker on each flagged point.
 
     ``triangle-up`` marks a value above its baseline and ``triangle-down`` one
@@ -214,7 +214,7 @@ def anomaly_figure(result: AnomalyResult, title: str) -> dict[str, Any]:
                 "hovertemplate": "%{text}<extra></extra>",
             }
         )
-    return {"data": traces, "layout": _layout(title, result.unit, result.period.frequency)}
+    return {"data": traces, "layout": _layout(result.unit, result.period.frequency)}
 
 
 # --- From a spec and its results ----------------------------------------------
@@ -253,8 +253,8 @@ def build_figure(spec: ChartSpec, results: Sequence[ToolResult]) -> dict[str, An
     result = _find(spec, results)
     kind = chart_type(spec, result)
     if kind == "anomaly":
-        return anomaly_figure(AnomalyResult.model_validate(result.data["result"]), spec.title)
-    return line_figure(_series_of(spec, result), spec.title)
+        return anomaly_figure(AnomalyResult.model_validate(result.data["result"]))
+    return line_figure(_series_of(spec, result))
 
 
 def _table(columns: list[tuple[str, str]], by_column: list[dict[str, float | None]]) -> TableView:

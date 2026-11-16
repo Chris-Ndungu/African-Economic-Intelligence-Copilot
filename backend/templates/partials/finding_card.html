@@ -3,7 +3,7 @@
     {% if card.hypothesis %}<span class="label label-hypothesis">Hypothesis</span>
     {% elif not card.unverified %}<span class="label label-fact">Observed fact</span>{% endif %}
     {% if card.unverified %}<span class="label label-unverified">Unverified</span>{% endif %}
-    <span class="kind">{{ card.kind }}</span>
+    {% if card.kind not in ("fact", "hypothesis") %}<span class="kind">{{ card.kind }}</span>{% endif %}
   </p>
   <p class="statement">{{ card.statement }}</p>
   {% if card.unverified %}
