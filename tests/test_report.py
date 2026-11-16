@@ -364,15 +364,29 @@ def two_chart_investigation():
 
     investigation = full()
     result = investigation.result
+    # A different series, so the two chart images differ: charts carry no title
+    # inside the image, and identical images would be stored once in the PDF.
+    other = make_series([4.0, 5.0, 6.0], country="NGA")
+    tool_result = result.tool_results[0]
+    data = {
+        **tool_result.data,
+        "series": [*tool_result.data["series"], other.model_dump(mode="json")],
+    }
     second = ChartSpec(
         id="c2",
         kind="line",
-        title="Inflation again",
+        title="Inflation in Nigeria",
         result_id="r1",
         unit="%",
-        series_ids=[result.series[0].id],
+        series_ids=[other.id],
     )
-    result = result.model_copy(update={"charts": [*result.charts, second]})
+    result = result.model_copy(
+        update={
+            "series": [*result.series, other],
+            "tool_results": [tool_result.model_copy(update={"data": data})],
+            "charts": [*result.charts, second],
+        }
+    )
     return investigation.model_copy(update={"result": result})
 
 
