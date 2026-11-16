@@ -213,7 +213,8 @@ release** once no running image uses what is removed.
    the prod URL.
 5. Roll back by hand as above, with the previous version's tag.
 
-The prod URL is expected to be <https://copilot-prod.onrender.com> (_confirm_). The app
+The prod URL is <https://copilot-prod.onrender.com>, confirmed by the first release,
+`v0.1.0`, on 2026-11-16. The app
 refuses `LLM_CLIENT=stub` when `COPILOT_ENVIRONMENT=prod`.
 
 ## Secrets
