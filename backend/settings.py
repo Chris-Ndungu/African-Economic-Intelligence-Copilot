@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     """Gemini API key, or `None`: the app still starts, and runs fail as not configured."""
 
     gemini_model: str = DEFAULT_MODEL
-    """The Gemini model; the default is the current stable Flash model."""
+    """The Gemini model; the default is Gemini 2.5 Flash."""
 
     gemini_timeout_seconds: float = Field(default=60.0, gt=0)
     """Longest wait for one Gemini call; a timed-out call is retried once."""

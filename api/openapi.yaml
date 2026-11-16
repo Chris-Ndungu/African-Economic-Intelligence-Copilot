@@ -972,7 +972,7 @@ components:
           summary_checks: []
           verified_count: 3
           unverified_count: 0
-          model: gemini-3.6-flash
+          model: gemini-2.5-flash
           prompt_version: interpret_v1
         tool_results: []
         charts: []
@@ -1032,7 +1032,7 @@ components:
             summary_checks: []
             verified_count: 0
             unverified_count: 0
-            model: gemini-3.6-flash
+            model: gemini-2.5-flash
             prompt_version: interpret_v1
           tool_results: []
           charts: []
