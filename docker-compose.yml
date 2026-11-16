@@ -35,6 +35,11 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    # Optional: settings such as COPILOT_GEMINI_API_KEY from .env (the image
+    # does not contain it). The values under environment win over it.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://copilot:copilot@db:5432/copilot
       COPILOT_LOG_LEVEL: info
