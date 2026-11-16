@@ -64,8 +64,8 @@ __all__ = [
 
 logger = logging.getLogger("copilot_core.llm")
 
-DEFAULT_MODEL = "gemini-2.5-flash"
-"""Gemini 2.5 Flash: quick, with free-tier quota for tool calling."""
+DEFAULT_MODEL = "gemini-3.6-flash"
+"""Gemini 3.6 Flash. Gemini 2.5 Flash is closed to new API keys (Google answers 404)."""
 
 BLOCKED = {
     types.FinishReason.SAFETY,
