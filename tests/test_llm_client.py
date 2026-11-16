@@ -114,7 +114,7 @@ def test_a_reply_returns_text_token_usage_and_latency():
     assert response.usage.output_tokens == 5  # reply tokens plus thinking tokens
     assert response.usage.latency_ms >= 0
     assert response.model == "gemini-3.6-flash"
-    assert transport.calls[0]["model"] == "gemini-3.6-flash"
+    assert transport.calls[0]["model"] == "gemini-2.5-flash"
 
 
 def test_tool_calls_are_returned_and_declarations_sent():
@@ -228,11 +228,28 @@ def test_a_timeout_is_not_retried_when_retries_are_off():
 
 
 @pytest.mark.parametrize("level", ["minimal", "low", "medium", "high"])
-def test_every_call_sends_the_thinking_level(level):
-    llm, transport, _ = client(reply(), thinking_level=level)
+def test_a_gemini_3_call_sends_the_thinking_level(level):
+    llm, transport, _ = client(reply(), thinking_level=level, model="gemini-3.6-flash")
     generate(llm)
     thinking = transport.calls[0]["config"].thinking_config
     assert thinking.thinking_level == types.ThinkingLevel(level.upper())
+    assert thinking.thinking_budget is None
+
+
+@pytest.mark.parametrize(
+    ("level", "budget"), [("minimal", 0), ("low", 1024), ("medium", 8192), ("high", -1)]
+)
+@pytest.mark.parametrize("model", ["gemini-2.5-flash", "models/gemini-2.5-flash-lite"])
+def test_a_gemini_2_5_call_sends_a_thinking_budget_and_no_level(level, budget, model):
+    llm, transport, _ = client(reply(), thinking_level=level, model=model)
+    generate(llm)
+    thinking = transport.calls[0]["config"].thinking_config
+    assert thinking.thinking_budget == budget
+    assert thinking.thinking_level is None
+
+
+def test_the_default_model_is_gemini_2_5_flash():
+    assert Settings(_env_file=None).gemini_model == "gemini-2.5-flash"
 
 
 def test_thinking_is_low_by_default():

@@ -64,8 +64,8 @@ __all__ = [
 
 logger = logging.getLogger("copilot_core.llm")
 
-DEFAULT_MODEL = "gemini-3.6-flash"
-"""The current stable Gemini Flash model."""
+DEFAULT_MODEL = "gemini-2.5-flash"
+"""Gemini 2.5 Flash: quick, with free-tier quota for tool calling."""
 
 BLOCKED = {
     types.FinishReason.SAFETY,
@@ -88,6 +88,26 @@ def live_gemini_allowed() -> bool:
 
 
 ThinkingLevel = Literal["minimal", "low", "medium", "high"]
+
+THINKING_BUDGETS: dict[ThinkingLevel, int] = {
+    "minimal": 0,
+    "low": 1024,
+    "medium": 8192,
+    "high": -1,
+}
+"""Gemini 2.5 models take a token budget instead of a level; -1 lets the model decide."""
+
+
+def thinking_config(model: str, level: ThinkingLevel) -> types.ThinkingConfig:
+    """The thinking setting ``model`` accepts: a budget for Gemini 2.x, a level for later ones.
+
+    Gemini 2.5 rejects ``thinking_level`` with a 400, and Gemini 3 prefers it to a budget.
+    """
+    name = model.removeprefix("models/")
+    if name.startswith(("gemini-2.", "gemini-1.")):
+        return types.ThinkingConfig(thinking_budget=THINKING_BUDGETS[level])
+    return types.ThinkingConfig(thinking_level=types.ThinkingLevel(level.upper()))
+
 
 TIMEOUT_RETRIES = 1
 """A timed-out call is retried this many times, within ``max_retries``."""
@@ -169,9 +189,7 @@ class GeminiClient:
         config = types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=self.config.max_output_tokens,
-            thinking_config=types.ThinkingConfig(
-                thinking_level=types.ThinkingLevel(self.config.thinking_level.upper())
-            ),
+            thinking_config=thinking_config(self.config.model, self.config.thinking_level),
             tools=[types.Tool(function_declarations=[_declaration(t) for t in tools])]
             if tools
             else None,
