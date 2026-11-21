@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     gemini_model: str = DEFAULT_MODEL
     """The Gemini model; the default is Gemini 3.6 Flash."""
 
+    gemini_fallback_model: str | None = "gemini-2.5-flash-lite"
+    """Tried when the main model stays rate-limited or overloaded after its retries; blank turns it off."""
+
     gemini_timeout_seconds: float = Field(default=60.0, gt=0)
     """Longest wait for one Gemini call; a timed-out call is retried once."""
 
@@ -142,7 +145,12 @@ class Settings(BaseSettings):
         return self
 
     @field_validator(
-        "database_url", "gemini_api_key", "otlp_endpoint", "otlp_headers", mode="before"
+        "database_url",
+        "gemini_api_key",
+        "gemini_fallback_model",
+        "otlp_endpoint",
+        "otlp_headers",
+        mode="before",
     )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
@@ -152,6 +160,7 @@ class Settings(BaseSettings):
         return GeminiConfig(
             api_key=self.gemini_api_key,
             model=self.gemini_model,
+            fallback_model=self.gemini_fallback_model,
             timeout_seconds=self.gemini_timeout_seconds,
             max_retries=self.gemini_max_retries,
             max_output_tokens=self.gemini_max_output_tokens,

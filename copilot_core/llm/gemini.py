@@ -126,6 +126,9 @@ class GeminiConfig:
     """How much Gemini reasons before answering. Gemini 3 defaults to high, which
     can take longer than the timeout; choosing tools and describing numbers that
     Python computed needs little reasoning."""
+    fallback_model: str | None = None
+    """Tried once, with its own retries, when ``model`` is still rate-limited or
+    overloaded (429 or 5xx) after its retries. ``None`` turns the fallback off."""
     backoff_seconds: float = 1.0
     """The first retry waits this long; each later one waits twice as long."""
 
@@ -186,10 +189,36 @@ class GeminiClient:
         if self.config.api_key is None or self.transport is None:
             raise LLMNotConfigured("Gemini is not configured: set COPILOT_GEMINI_API_KEY")
         contents = [_content(m) for m in messages]
+        try:
+            return await self._generate_with(
+                self.config.model, contents, system, tools, response_schema
+            )
+        except LLMUnavailable as exc:
+            fallback = self.config.fallback_model
+            if not fallback or fallback == self.config.model:
+                raise
+            logger.warning(
+                "Gemini %s is unavailable (%s); trying the fallback model %s",
+                self.config.model,
+                exc,
+                fallback,
+            )
+            return await self._generate_with(fallback, contents, system, tools, response_schema)
+
+    async def _generate_with(
+        self,
+        model: str,
+        contents: list[types.Content],
+        system: str | None,
+        tools: list[ToolDeclaration] | None,
+        response_schema: type[BaseModel] | None,
+    ) -> LLMResponse:
+        """One model's call, with its timeout and retries."""
+        assert self.transport is not None
         config = types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=self.config.max_output_tokens,
-            thinking_config=thinking_config(self.config.model, self.config.thinking_level),
+            thinking_config=thinking_config(model, self.config.thinking_level),
             tools=[types.Tool(function_declarations=[_declaration(t) for t in tools])]
             if tools
             else None,
@@ -204,7 +233,7 @@ class GeminiClient:
             try:
                 async with asyncio.timeout(self.config.timeout_seconds):
                     response = await self.transport.generate_content(
-                        model=self.config.model, contents=contents, config=config
+                        model=model, contents=contents, config=config
                     )
             except TimeoutError:
                 error = LLMTimeout(
