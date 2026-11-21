@@ -132,7 +132,7 @@ success:
 | Gemini not configured, unavailable, blocked, truncated or timed out, or its reply unreadable | `failed`, `gemini_...` or `interpretation_invalid` | `503`, `service: gemini` |
 | Data service unavailable | `failed`, `data_unavailable` | `503`, `service: data_service` |
 | Step limit reached | `failed`, `step_limit_reached` | `422`, `code: step_limit_reached` |
-| Over the time limit (90 seconds by default) | `failed`, `timeout` | `503`, `service: null` |
+| Over the time limit (180 seconds by default) | `failed`, `timeout` | `503`, `service: null` |
 
 When the API starts, runs left `running` longer than the time limit are
 marked `failed` with code `interrupted`, and runs left `pending` longer than

@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     max_tool_result_points: int = Field(default=500, ge=1)
     """Data points one tool call may load before it is asked to narrow the request."""
 
-    investigation_time_limit_seconds: float = Field(default=90.0, gt=0)
+    investigation_time_limit_seconds: float = Field(default=180.0, gt=0)
     """Longest a whole run may take before it is saved as `failed` with code `timeout`."""
 
     pending_run_timeout_seconds: float = Field(default=300.0, gt=0)

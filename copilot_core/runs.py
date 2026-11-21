@@ -102,7 +102,7 @@ FINAL_INSTRUCTION = (
 class RunSettings:
     step_limit: int = 8
     max_points: int = 500
-    time_limit_seconds: float = 90.0
+    time_limit_seconds: float = 180.0
     pending_timeout_seconds: float = 300.0
     ping_seconds: float = 15.0
 
