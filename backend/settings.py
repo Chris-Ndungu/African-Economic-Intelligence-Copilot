@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     gemini_model: str = DEFAULT_MODEL
     """The Gemini model; the default is Gemini 3.6 Flash."""
 
-    gemini_fallback_model: str | None = "gemini-2.5-flash-lite"
-    """Tried when the main model stays rate-limited or overloaded after its retries; blank turns it off."""
+    gemini_fallback_model: str | None = None
+    """Tried when the main model stays rate-limited or overloaded after its retries; `None` or blank turns it off (the default)."""
 
     gemini_timeout_seconds: float = Field(default=60.0, gt=0)
     """Longest wait for one Gemini call; a timed-out call is retried once."""

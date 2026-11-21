@@ -203,7 +203,11 @@ class GeminiClient:
                 exc,
                 fallback,
             )
-            return await self._generate_with(fallback, contents, system, tools, response_schema)
+            try:
+                return await self._generate_with(fallback, contents, system, tools, response_schema)
+            except LLMError as fallback_exc:
+                logger.warning("The fallback model %s failed too (%s)", fallback, fallback_exc)
+                raise exc from None
 
     async def _generate_with(
         self,
