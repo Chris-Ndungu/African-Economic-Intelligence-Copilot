@@ -252,6 +252,54 @@ def test_the_default_model_is_gemini_3_6_flash():
     assert Settings(_env_file=None).gemini_model == "gemini-3.6-flash"
 
 
+def test_an_overloaded_model_falls_back_to_the_fallback_model():
+    llm, transport, _ = client(
+        *[api_error(503)] * 4, reply("From the fallback"), fallback_model="gemini-2.5-flash-lite"
+    )
+    response = generate(llm)
+    assert response.text == "From the fallback"
+    assert [c["model"] for c in transport.calls] == ["gemini-3.6-flash"] * 4 + [
+        "gemini-2.5-flash-lite"
+    ]
+
+
+def test_the_fallback_model_failing_too_raises_llm_unavailable():
+    llm, transport, _ = client(*[api_error(503)] * 8, fallback_model="gemini-2.5-flash-lite")
+    with pytest.raises(LLMUnavailable):
+        generate(llm)
+    assert len(transport.calls) == 8
+
+
+def test_without_a_fallback_model_an_overloaded_model_raises_llm_unavailable():
+    llm, transport, _ = client(*[api_error(503)] * 4)
+    with pytest.raises(LLMUnavailable):
+        generate(llm)
+    assert len(transport.calls) == 4
+
+
+@pytest.mark.parametrize("code", [400, 403])
+def test_a_rejected_request_does_not_use_the_fallback_model(code):
+    llm, transport, _ = client(api_error(code), fallback_model="gemini-2.5-flash-lite")
+    with pytest.raises(LLMRequestError):
+        generate(llm)
+    assert len(transport.calls) == 1
+
+
+def test_a_fallback_model_that_also_fails_raises_the_original_error():
+    llm, _, _ = client(*[api_error(503, "overloaded")] * 4, api_error(404), fallback_model="gone")
+    with pytest.raises(LLMUnavailable, match="overloaded"):
+        generate(llm)
+
+
+def test_the_fallback_model_is_off_by_default_and_blank_turns_it_off():
+    assert Settings(_env_file=None).gemini_config().fallback_model is None
+    configured = Settings(_env_file=None, gemini_fallback_model="other-model")
+    assert configured.gemini_config().fallback_model == "other-model"
+    assert (
+        Settings(_env_file=None, gemini_fallback_model=" ").gemini_config().fallback_model is None
+    )
+
+
 def test_thinking_is_low_by_default():
     settings = Settings(_env_file=None)
     assert settings.gemini_config().thinking_level == "low"
